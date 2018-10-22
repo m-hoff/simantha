@@ -35,6 +35,7 @@ class SimulationParameters:
                 maint_capacity=1,
                 pm_interval=0,
                 pm_duration=0,
+                fixed_failures = [], # planned downtime, (location, time, duration)
 
                 cm_cost=0,
                 pm_cost=0,
@@ -104,6 +105,9 @@ class SimulationParameters:
         self.PM_INTERVAL = pm_interval # time between PM activities
         self.PM_DURATION = pm_duration # duration of PM
 
+        # planned failures during simulation time
+        self.FIXED_FAILURES = fixed_failures
+
         # cost data
         self.CM_COST = cm_cost # cost of a corrective maintenance action
         self.PM_COST = pm_cost # cost of a preventative maintenance action
@@ -156,6 +160,7 @@ class Machine():
         self.process_time = process_time
 
         self.rand_failures = rand_failures
+        self.fixed_failures = [dt for dt in self.p.FIXED_FAILURES if dt[0]==self.idx]
         self.broken = False
         self.total_failure = False
         self.repair_type = 'none'
@@ -186,7 +191,15 @@ class Machine():
                     yield self.in_buff.get(1)
 
                 # process part
-                yield self.env.timeout(self.process_time)
+                #yield self.env.timeout(self.process_time)
+
+                #TODO: speed test this
+                for t in range(self.process_time):
+                    yield self.env.timeout(1)
+
+                #TODO
+                # check if planned failure is scheduled
+
 
                 # put processed part in output buffer (except last machine in line)
                 if self.idx + 1 < self.p.NUM_MACHINES:
@@ -372,6 +385,8 @@ class Scenario:
             self.pm_duration = policy_parameters['duration']
         elif self.p.MAINT_POLICY == 'CBM':
             self.thresholds = policy_parameters['thresholds']
+
+        self.fixed_failures = self.p.FIXED_FAILURES
 
         #self.thresholds = thresholds # CBM thresholds
         self.bottleneck = self.p.PROCESS_TIMES.index(max(self.p.PROCESS_TIMES))
