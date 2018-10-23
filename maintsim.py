@@ -35,7 +35,7 @@ class SimulationParameters:
                 maint_capacity=1,
                 pm_interval=0,
                 pm_duration=0,
-                fixed_failures = [], # planned downtime, (location, time, duration)
+                planned_failures = [], # planned downtime, (location, time, duration)
 
                 cm_cost=0,
                 pm_cost=0,
@@ -106,7 +106,7 @@ class SimulationParameters:
         self.PM_DURATION = pm_duration # duration of PM
 
         # planned failures during simulation time
-        self.FIXED_FAILURES = fixed_failures
+        self.PLANNED_FAILURES = planned_failures
 
         # cost data
         self.CM_COST = cm_cost # cost of a corrective maintenance action
@@ -160,7 +160,7 @@ class Machine():
         self.process_time = process_time
 
         self.rand_failures = rand_failures
-        self.fixed_failures = [dt for dt in self.p.FIXED_FAILURES if dt[0]==self.idx]
+        self.planned_failures = [dt for dt in self.p.PLANNED_FAILURES if dt[0]==self.idx]
         self.broken = False
         self.total_failure = False
         self.repair_type = 'none'
@@ -179,8 +179,27 @@ class Machine():
         if self.idx + 1 < self.p.NUM_MACHINES:
             self.out_buff = eval('self.buffers[{}].buffer'.format(idx+1))
 
+        self.idle = False
         self.process = self.env.process(self.working(repairman))
         self.env.process(self.deteriorate())
+
+    def check_planned_failures(self):
+        for downtime in self.planned_failures:
+            if self.env.now - self.p.WARMUP_TIME == downtime[1]:
+                print('Planned downtime started on machine {} at t={}'.format(self.idx, self.env.now - self.p.WARMUP_TIME))
+                if self.p.MAINT_POLICY == 'CM':
+                    self.enter_q = self.env.now - self.p.WARMUP_TIME
+                    #print('Machine {} entered Q at {}'.format(self.idx, self.enter_q))
+                self.total_failure = True
+                self.planned_repair_time = downtime[2]
+                new_maint = pd.DataFrame([[self.env.now-self.p.WARMUP_TIME, self.idx, 'planned', 'failure', self.env.now-self.p.WARMUP_TIME]],#-last_failure_time]],
+                                        columns=['time','machine','type','activity','TTF/TTR'])
+                self.repair_type = 'planned'
+                self.scenario.maintenance_data = self.scenario.maintenance_data.append(new_maint, ignore_index=True)
+                self.process.interrupt()
+            else:
+                #print(self.env.now - self.p.WARMUP_TIME, downtime[1])
+                pass
 
     def working(self, repairman):
         prev_part = 0
@@ -188,6 +207,7 @@ class Machine():
             try:
                 # retrieve part from input buffer (except for first machine in line)
                 if self.idx > 0:
+                    #TODO: measure/record idle time here
                     yield self.in_buff.get(1)
 
                 # process part
@@ -196,13 +216,27 @@ class Machine():
                 #TODO: speed test this
                 for t in range(self.process_time):
                     yield self.env.timeout(1)
+                    #self.check_planned_failures()
 
-                #TODO
-                # check if planned failure is scheduled
-
+                    # check if planned failure is scheduled
+                    # for downtime in self.planned_failures:
+                    #     if self.env.now - self.p.WARMUP_TIME == downtime[1]:
+                    #         print('Planned downtime started at {}'.format(self.env.now - self.p.WARMUP_TIME))
+                    #         if self.p.MAINT_POLICY == 'CM':
+                    #             self.enter_q = self.env.now - self.p.WARMUP_TIME
+                    #             #print('Machine {} entered Q at {}'.format(self.idx, self.enter_q))
+                    #         self.total_failure = True
+                    #         new_maint = pd.DataFrame([[self.env.now-self.p.WARMUP_TIME, self.idx, 'planned', 'failure', self.env.now-self.p.WARMUP_TIME-last_failure_time]],
+                    #                                 columns=['time','machine','type','activity','TTF/TTR'])
+                    #         self.repair_type = 'planned'
+                    #         self.scenario.maintenance_data = self.scenario.maintenance_data.append(new_maint, ignore_index=True)
+                    #         self.process.interrupt()
+                    #     else:
+                    #         print(self.env.now - self.p.WARMUP_TIME, downtime[1])
 
                 # put processed part in output buffer (except last machine in line)
                 if self.idx + 1 < self.p.NUM_MACHINES:
+                    #TODO: measure/record idle time here
                     yield self.out_buff.put(1)
 
                 if (self.env.now > self.p.WARMUP_TIME) and (not self.total_failure):
@@ -221,6 +255,8 @@ class Machine():
                 # TODO: correct TTR distributions
                 if (self.health < 10) and (self.p.MAINT_POLICY=='CBM'): # preventive repair
                     time_to_repair = random.randint(5, 15)
+                elif self.repair_type == 'planned':
+                    time_to_repair = self.planned_repair_time
                 else: # total failure
                     time_to_repair = random.randint(10, 20)
                 #time_to_repair = self.p.REPAIR_DIST()
@@ -232,7 +268,9 @@ class Machine():
                     #print('Mahcine {} repair started at {}'.format(self.idx, self.env.now))
                     fail_start = self.env.now # start time of repair job
                     # write type of job started
-                    if self.total_failure:
+                    if self.repair_type == 'planned':
+                        job_type = 'planned'
+                    elif self.total_failure:
                         job_type = 'CM'
                     else:
                         job_type = 'CBM'
@@ -262,7 +300,10 @@ class Machine():
                 self.scenario.production_data.loc[maint_start:maint_end, 'M{} running'.format(self.idx)] = 0
 
                 # add entry to maintenance dataframe for repair end
-                if self.total_failure:
+                if self.repair_type == 'planned':
+                    new_maint = pd.DataFrame([[self.env.now-self.p.WARMUP_TIME, int(self.idx), 'planned', 'repair end', time_to_repair]],
+                                            columns=['time', 'machine', 'type', 'activity', 'TTF/TTR'])
+                elif self.total_failure:
                     # corrective maintenance activity was performed
                     new_maint = pd.DataFrame([[self.env.now-self.p.WARMUP_TIME, int(self.idx), 'CM', 'repair end', time_to_repair]],
                                             columns=['time', 'machine', 'type', 'activity', 'TTF/TTR'])
@@ -282,6 +323,7 @@ class Machine():
         while True:
             while (random.random() < self.p.DEGRADATION[self.idx]):
                 yield self.env.timeout(1)
+                self.check_planned_failures()
                 #health[self.idx] += [self.health]
             yield self.env.timeout(1)
             if len(self.scenario.maintenance_data[self.scenario.maintenance_data['machine']==self.idx]['time']) > 0:
@@ -386,7 +428,7 @@ class Scenario:
         elif self.p.MAINT_POLICY == 'CBM':
             self.thresholds = policy_parameters['thresholds']
 
-        self.fixed_failures = self.p.FIXED_FAILURES
+        self.planned_failures = self.p.PLANNED_FAILURES
 
         #self.thresholds = thresholds # CBM thresholds
         self.bottleneck = self.p.PROCESS_TIMES.index(max(self.p.PROCESS_TIMES))
@@ -412,7 +454,8 @@ class Scenario:
                       columns=['Machine {} production'.format(i) for i in range(self.p.NUM_MACHINES)]
                       +['Machine {} TH'.format(j) for j in range(self.p.NUM_MACHINES)]
                       +['M{} running'.format(k) for k in range(self.p.NUM_MACHINES)]
-                      +['Ideal production'])
+                      +['Ideal production']
+                      +['M{} processing'.format(l) for l in range(self.p.NUM_MACHINES)])
 
         machines_avail = ['M{} running'.format(m) for m in range(self.p.NUM_MACHINES)]
         self.production_data.loc[:,machines_avail] = 1
@@ -450,8 +493,10 @@ class Scenario:
             for m in range(self.p.NUM_MACHINES):
                 machine_p = 'Machine {} production'.format(m)
                 machine_th = 'Machine {} TH'.format(m)
+                machine_processing = 'M{} processing'.format(m)
                 self.production_data.loc[:,machine_p].fillna(max(self.production_data.loc[:,machine_p])+1, inplace=True)
                 self.production_data.loc[:,machine_th] = self.production_data.loc[:,machine_p] / self.production_data.index.values
+                self.production_data.loc[:,machine_processing] = 1
 
             # summary data
             for m in range(self.p.NUM_MACHINES):
@@ -489,6 +534,7 @@ class Scenario:
             self.summary_data.loc['System', 'MTTR'] = np.mean(self.summary_data['MTTR'][:-1])
 
             # availability
+            #TODO: fix availability calculation
             self.summary_data.loc['System', 'availability'] = np.mean(self.summary_data['availability'][:-1])
 
             # average queue time
