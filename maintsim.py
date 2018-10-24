@@ -186,7 +186,7 @@ class Machine():
     def check_planned_failures(self):
         for downtime in self.planned_failures:
             if self.env.now - self.p.WARMUP_TIME == downtime[1]:
-                print('Planned downtime started on machine {} at t={}'.format(self.idx, self.env.now - self.p.WARMUP_TIME))
+                #print('Planned downtime started on machine {} at t={}'.format(self.idx, self.env.now - self.p.WARMUP_TIME))
                 if self.p.MAINT_POLICY == 'CM':
                     self.enter_q = self.env.now - self.p.WARMUP_TIME
                     #print('Machine {} entered Q at {}'.format(self.idx, self.enter_q))
@@ -205,10 +205,21 @@ class Machine():
         prev_part = 0
         while True:
             try:
+                idle_start = idle_stop = 0
+
                 # retrieve part from input buffer (except for first machine in line)
                 if self.idx > 0:
-                    #TODO: measure/record idle time here
+                    idle_start = self.env.now - self.p.WARMUP_TIME
                     yield self.in_buff.get(1)
+                    idle_stop = self.env.now - self.p.WARMUP_TIME
+                    #print(self.env.now, self.idx, idle_start, idle_stop)
+                    # STARVED if idle here
+
+                if idle_stop - idle_start > 0: # machine was idle
+                    #print(self.env.now, self.idx, idle_start, idle_stop)
+                    self.scenario.production_data.loc[idle_start:idle_stop-1, 'M{} processing'.format(self.idx)] = 0
+                    #if (self.idx == 2) & (self.env.now > self.p.WARMUP_TIME):
+                        #print('Machine {} idle from {} to {}'.format(self.idx, idle_start, idle_stop))
 
                 # process part
                 #yield self.env.timeout(self.process_time)
@@ -236,8 +247,13 @@ class Machine():
 
                 # put processed part in output buffer (except last machine in line)
                 if self.idx + 1 < self.p.NUM_MACHINES:
-                    #TODO: measure/record idle time here
+                    idle_start = self.env.now - self.p.WARMUP_TIME
                     yield self.out_buff.put(1)
+                    idle_stop = self.env.now - self.p.WARMUP_TIME
+                    # BLOCKED if idle here
+
+                if idle_stop - idle_start > 0: # machine was idle
+                    self.scenario.production_data.loc[idle_start:idle_stop-1, 'M{} processing'.format(self.idx)] = 0
 
                 if (self.env.now > self.p.WARMUP_TIME) and (not self.total_failure):
                     self.parts_made += 1
@@ -433,7 +449,7 @@ class Scenario:
         #self.thresholds = thresholds # CBM thresholds
         self.bottleneck = self.p.PROCESS_TIMES.index(max(self.p.PROCESS_TIMES))
 
-    def simulate(self, summary=True, data_collect=True, get_costs=False):
+    def simulate(self, summary=True, data_collect=True, get_costs=False, return_PMOW=False):
         # initialize simulation environment and objects
         self.env = simpy.Environment()
         self.policy_cost = 0
@@ -459,6 +475,8 @@ class Scenario:
 
         machines_avail = ['M{} running'.format(m) for m in range(self.p.NUM_MACHINES)]
         self.production_data.loc[:,machines_avail] = 1
+        machines_processing = ['M{} processing'.format(l) for l in range(self.p.NUM_MACHINES)]
+        self.production_data.loc[:,machines_processing] = 1
 
         # summary data frame
         self.summary_data = pd.DataFrame(index=['Machine {}'.format(m) for m in range(self.p.NUM_MACHINES)]+['System'],
@@ -496,7 +514,7 @@ class Scenario:
                 machine_processing = 'M{} processing'.format(m)
                 self.production_data.loc[:,machine_p].fillna(max(self.production_data.loc[:,machine_p])+1, inplace=True)
                 self.production_data.loc[:,machine_th] = self.production_data.loc[:,machine_p] / self.production_data.index.values
-                self.production_data.loc[:,machine_processing] = 1
+                #self.production_data.loc[:,machine_processing] = 1
 
             # summary data
             for m in range(self.p.NUM_MACHINES):
@@ -570,9 +588,16 @@ class Scenario:
         self.cost_data = pd.Series(index=['PM cost', 'CM cost', 'LP cost', 'Total cost'],
                                     data=[cbm_maintenance_cost, cm_maintenance_cost, lost_production_cost, self.policy_cost])
 
+        if return_PMOW:
+            return sum(1-self.production_data.loc[0:,'M2 processing'])
+
         # TODO: change summary output
         if summary:
+            print()
             print(self.summary_data)
+            print('\n Bottleneck machine idle for {} time units.'.format(
+                    sum(1-self.production_data.loc[0:,'M2 processing'])
+            ))
 
         if get_costs:
             return cbm_maintenance_cost, cm_maintenance_cost, lost_production_cost, self.policy_cost
