@@ -174,6 +174,7 @@ class Machine():
 
         # assign input buffer
         self.in_buff = eval('self.buffers[{}].buffer'.format(idx))
+        self.in_buff_level = []
 
         # assign output buffer (except last station)
         if self.idx + 1 < self.p.NUM_MACHINES:
@@ -182,6 +183,8 @@ class Machine():
         self.idle = False
         self.process = self.env.process(self.working(repairman))
         self.env.process(self.deteriorate())
+
+
 
     def check_planned_failures(self):
         for downtime in self.planned_failures:
@@ -210,8 +213,14 @@ class Machine():
                 # retrieve part from input buffer (except for first machine in line)
                 if self.idx > 0:
                     idle_start = self.env.now - self.p.WARMUP_TIME
+                    # if (self.idx == 1) & (self.env.now-self.p.WARMUP_TIME == 53):
+                    #     print('!!! M1 took part from buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
+                    #     'level={}'.format(self.in_buff.level))
                     yield self.in_buff.get(1)
                     idle_stop = self.env.now - self.p.WARMUP_TIME
+                    # if (self.idx == 1) & (self.env.now > self.p.WARMUP_TIME):
+                    #     print('M1 took part from buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
+                    #     'level={}'.format(self.in_buff.level))
                     #print(self.env.now, self.idx, idle_start, idle_stop)
                     # STARVED if idle here
 
@@ -249,6 +258,9 @@ class Machine():
                 if self.idx + 1 < self.p.NUM_MACHINES:
                     idle_start = self.env.now - self.p.WARMUP_TIME
                     yield self.out_buff.put(1)
+                    # if (self.idx == 0) & (self.env.now > self.p.WARMUP_TIME):
+                    #     print('M0 placed part in buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
+                    #     'level={}'.format(self.out_buff.level))
                     idle_stop = self.env.now - self.p.WARMUP_TIME
                     # BLOCKED if idle here
 
@@ -339,6 +351,7 @@ class Machine():
         while True:
             while (random.random() < self.p.DEGRADATION[self.idx]):
                 yield self.env.timeout(1)
+                self.in_buff_level += [self.in_buff.level]
                 self.check_planned_failures()
                 #health[self.idx] += [self.health]
             yield self.env.timeout(1)
