@@ -164,7 +164,7 @@ class Machine():
         self.broken = False
         self.total_failure = False
         self.repair_type = 'none'
-
+        self.has_part = False
         self.parts_made = 0
 
         self.health = 0
@@ -180,6 +180,8 @@ class Machine():
         if self.idx + 1 < self.p.NUM_MACHINES:
             self.out_buff = eval('self.buffers[{}].buffer'.format(idx+1))
 
+        self.remaining_process_time = self.process_time
+        self.DT_crit_window = pd.DataFrame()
         self.idle = False
         self.process = self.env.process(self.working(repairman))
         self.env.process(self.deteriorate())
@@ -217,6 +219,8 @@ class Machine():
                     #     print('!!! M1 took part from buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
                     #     'level={}'.format(self.in_buff.level))
                     yield self.in_buff.get(1)
+                    self.has_part = True
+                    self.remaining_process_time = self.process_time
                     idle_stop = self.env.now - self.p.WARMUP_TIME
                     # if (self.idx == 1) & (self.env.now > self.p.WARMUP_TIME):
                     #     print('M1 took part from buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
@@ -234,8 +238,14 @@ class Machine():
                 #yield self.env.timeout(self.process_time)
 
                 #TODO: speed test this
+
                 for t in range(self.process_time):
+                    self.scenario.production_data.loc[self.env.now, 'M{} processing'.format(self.idx)] = 1
+                    #self.DT_crit_window += [self.get_critical_downtime()]
+
+                    self.get_critical_downtime()
                     yield self.env.timeout(1)
+                    self.remaining_process_time -= 1
                     #self.check_planned_failures()
 
                     # check if planned failure is scheduled
@@ -256,16 +266,17 @@ class Machine():
 
                 # put processed part in output buffer (except last machine in line)
                 if self.idx + 1 < self.p.NUM_MACHINES:
-                    idle_start = self.env.now - self.p.WARMUP_TIME
+                    #idle_start = self.env.now - self.p.WARMUP_TIME
                     yield self.out_buff.put(1)
+                    self.has_part = False
                     # if (self.idx == 0) & (self.env.now > self.p.WARMUP_TIME):
                     #     print('M0 placed part in buffer at {}'.format(self.env.now-self.p.WARMUP_TIME),
                     #     'level={}'.format(self.out_buff.level))
-                    idle_stop = self.env.now - self.p.WARMUP_TIME
+                    #idle_stop = self.env.now - self.p.WARMUP_TIME
                     # BLOCKED if idle here
-
-                if idle_stop - idle_start > 0: # machine was idle
-                    self.scenario.production_data.loc[idle_start:idle_stop-1, 'M{} processing'.format(self.idx)] = 0
+                #
+                # if idle_stop - idle_start > 0: # machine was idle
+                #     self.scenario.production_data.loc[idle_start:idle_stop-1, 'M{} processing'.format(self.idx)] = 0
 
                 if (self.env.now > self.p.WARMUP_TIME) and (not self.total_failure):
                     self.parts_made += 1
@@ -277,6 +288,7 @@ class Machine():
                 #global maintenance_df
                 #global repairs
                 self.broken = True
+                self.has_part = False
                 #print('Machine {} broken down at t = {}'.format(self.idx, self.env.now-self.p.WARMUP_TIME))
                 #print('Job priority: {}\n'.format(self.priority))
 
@@ -382,39 +394,87 @@ class Machine():
                 self.process.interrupt()
 
     def get_priority(self):
-            # calculate maintenance opportunity window at time of maintenance scheduling
-            # determine position in relation to bottleneck
-            # find contents of upstream/downstream buffers
-            # calculate maintenance window
-            if self.p.QUEUE_DISCIPLINE == 'priority':
-                # upstream of bottleneck
-                # W = bottleneck time * sum(buffer contents between machine and bottleneck)
-                if self.idx < self.scenario.bottleneck:
-                    #print('upstream of bottleneck')
-                    buffer_contents = 0
-                    for b in range(self.idx+1, self.scenario.bottleneck+1):
-                        #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
-                        buffer_contents += self.scenario.buffers[b].buffer.level
-                    W = max(self.p.PROCESS_TIMES) * buffer_contents
-                # bottleneck
-                elif self.idx == self.scenario.bottleneck:
-                    #print('at bottleneck')
-                    W = 0
-                # downstream of bottleneck
-                # IGNORE FIRST INPUT BUFFER
-                # W = bottleneck time * sum(buffer cap - buffer contents for buffer between bottleneck and machine)
-                else:
-                    buffer_contents = 0
-                    #print('downstrem of bottleneck')
-                    for b in range(self.scenario.bottleneck+1, self.idx+1):
-                        #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
-                        buffer_contents += (self.p.BUFFER_SIZES - self.scenario.buffers[b].buffer.level)
-                    W = max(self.p.PROCESS_TIMES) * buffer_contents
+        # calculate maintenance opportunity window at time of maintenance scheduling
+        # determine position in relation to bottleneck
+        # find contents of upstream/downstream buffers
+        # calculate maintenance window
+        if self.p.QUEUE_DISCIPLINE == 'priority':
+            # upstream of bottleneck
+            # W = bottleneck time * sum(buffer contents between machine and bottleneck)
+            if self.idx < self.scenario.bottleneck:
+                #print('upstream of bottleneck')
+                buffer_contents = 0
+                for b in range(self.idx+1, self.scenario.bottleneck+1):
+                    #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
+                    buffer_contents += self.scenario.buffers[b].buffer.level
+                W = max(self.p.PROCESS_TIMES) * buffer_contents
+            # bottleneck
+            elif self.idx == self.scenario.bottleneck:
+                #print('at bottleneck')
+                W = 0
+            # downstream of bottleneck
+            # IGNORE FIRST INPUT BUFFER
+            # W = bottleneck time * sum(buffer cap - buffer contents for buffer between bottleneck and machine)
             else:
-                W = 1
+                buffer_contents = 0
+                #print('downstrem of bottleneck')
+                for b in range(self.scenario.bottleneck+1, self.idx+1):
+                    #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
+                    buffer_contents += (self.p.BUFFER_SIZES - self.scenario.buffers[b].buffer.level)
+                W = max(self.p.PROCESS_TIMES) * buffer_contents
+        else:
+            W = 1
 
-            return W
+        return W
 
+    def get_critical_downtime(self):
+        if self.idx < self.scenario.bottleneck:
+            buffer_contents = 0
+            machine_contents = -1
+            t_res = 0 # time to resume
+            for m in range(self.idx+1, self.scenario.bottleneck+1):
+                #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
+                buffer_contents += self.scenario.buffers[m].buffer.level
+                if self.scenario.machines[m].has_part:
+                    machine_contents += 1 # is this always true? - not for bottleneck
+                t_res += self.p.PROCESS_TIMES[m]
+            if self.scenario.machines[self.scenario.bottleneck].has_part:
+                bneck_time = self.scenario.machines[self.scenario.bottleneck].remaining_process_time
+            else:
+                bneck_time = 0
+            t_cons = ((buffer_contents + machine_contents)*max(self.p.PROCESS_TIMES)
+                      + bneck_time)
+            DT_crit = t_cons - t_res
+            # if self.idx == 0:
+            #     print('t={}'.format(self.env.now))
+            #     print('buffer contents={}'.format(buffer_contents))
+            #     print('machine contents={}'.format(machine_contents))
+            #     print('remaining process={}'.format(self.scenario.machines[self.scenario.bottleneck].remaining_process_time))
+            #     print('t_res={}'.format(t_res))
+            #     print('DT_crit={}'.format(DT_crit))
+            #     print()
+        # bottleneck
+        elif self.idx == self.scenario.bottleneck:
+            #print('at bottleneck')
+            DT_crit = 0
+        # downstream of bottleneck
+        # IGNORE FIRST INPUT BUFFER
+        # W = bottleneck time * sum(buffer cap - buffer contents for buffer between bottleneck and machine)
+        else:
+            buffer_vacancy = 0
+            machine_vacancy = 0
+            #print('downstrem of bottleneck')
+            for m in range(self.scenario.bottleneck+1, self.idx+1):
+                #print('buffer {} contents: {}'.format(b, self.scenario.buffers[b].buffer.level))
+                buffer_vacancy += (self.p.BUFFER_SIZES[m] - self.scenario.buffers[m].buffer.level)
+                if not self.scenario.machines[m].has_part:
+                    machine_vacancy += 1
+
+            #DT_crit = max(self.p.PROCESS_TIMES) * buffer_contents
+            DT_crit = ((buffer_vacancy + machine_vacancy - 1)*max(self.p.PROCESS_TIMES)
+                      + self.scenario.machines[self.scenario.bottleneck].remaining_process_time)
+        #return DT_crit
+        self.DT_crit_window.loc[self.env.now,'DT_crit'] = max([0, DT_crit])
 
 # buffer object
 class Buffer():
@@ -489,7 +549,7 @@ class Scenario:
         machines_avail = ['M{} running'.format(m) for m in range(self.p.NUM_MACHINES)]
         self.production_data.loc[:,machines_avail] = 1
         machines_processing = ['M{} processing'.format(l) for l in range(self.p.NUM_MACHINES)]
-        self.production_data.loc[:,machines_processing] = 1
+        self.production_data.loc[:,machines_processing] = 0
 
         # summary data frame
         self.summary_data = pd.DataFrame(index=['Machine {}'.format(m) for m in range(self.p.NUM_MACHINES)]+['System'],
