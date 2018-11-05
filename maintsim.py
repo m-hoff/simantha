@@ -183,6 +183,7 @@ class Machine():
         self.remaining_process_time = self.process_time
         self.DT_crit_window = pd.DataFrame()
         self.idle = False
+		
         self.process = self.env.process(self.working(repairman))
         self.env.process(self.deteriorate())
 
