@@ -188,7 +188,6 @@ class Machine():
         self.env.process(self.deteriorate())
 
 
-
     def check_planned_failures(self):
         for downtime in self.planned_failures:
             if self.env.now - self.p.WARMUP_TIME == downtime[1]:
@@ -248,22 +247,6 @@ class Machine():
                     yield self.env.timeout(1)
                     self.remaining_process_time -= 1
                     #self.check_planned_failures()
-
-                    # check if planned failure is scheduled
-                    # for downtime in self.planned_failures:
-                    #     if self.env.now - self.p.WARMUP_TIME == downtime[1]:
-                    #         print('Planned downtime started at {}'.format(self.env.now - self.p.WARMUP_TIME))
-                    #         if self.p.MAINT_POLICY == 'CM':
-                    #             self.enter_q = self.env.now - self.p.WARMUP_TIME
-                    #             #print('Machine {} entered Q at {}'.format(self.idx, self.enter_q))
-                    #         self.total_failure = True
-                    #         new_maint = pd.DataFrame([[self.env.now-self.p.WARMUP_TIME, self.idx, 'planned', 'failure', self.env.now-self.p.WARMUP_TIME-last_failure_time]],
-                    #                                 columns=['time','machine','type','activity','TTF/TTR'])
-                    #         self.repair_type = 'planned'
-                    #         self.scenario.maintenance_data = self.scenario.maintenance_data.append(new_maint, ignore_index=True)
-                    #         self.process.interrupt()
-                    #     else:
-                    #         print(self.env.now - self.p.WARMUP_TIME, downtime[1])
 
                 # put processed part in output buffer (except last machine in line)
                 if self.idx + 1 < self.p.NUM_MACHINES:
