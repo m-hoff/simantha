@@ -30,6 +30,7 @@ class Machine:
             self.PM_duration = maintenance_parameters['PM duration'][self.m]
         elif self.maintenance_policy == 'CBM':
             self.CBM_threshold = maintenance_parameters['CBM threshold'][self.m]
+        # 'None' maintenance policy == 'CM'
         
         # assign input buffer
         if self.m > 0:
@@ -64,29 +65,38 @@ class Machine:
                 
                 # get part from input buffer
                 if self.m > 0: 
+                    self.write_data()
                     idle_start = self.env.now - G.warmup_time
+                    while self.in_buff.level < 1:
+                        yield self.env.timeout(1)
+                        self.write_state()
                     yield self.in_buff.get(1)
                     idle_stop = self.env.now - G.warmup_time
                     self.has_part = True
-                
+                                
                 self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
                 if idle_stop - idle_start > 0:
-                    print('M{} idle at time {}'.format(self.m, self.env.now))
+                    #print('M{} idle at time {}'.format(self.m, self.env.now))
                     self.system.machine_data.loc[idle_start:idle_stop, 
                                                  self.name+' forced idle'] = 1
                     
                 # process part
                 for t in range(self.process_time):
                     # TODO: record processing
+                    self.write_state()
+                                       
                     yield self.env.timeout(1)
                     self.remaining_process_time -= 1
-                    
+                                                            
                 # put finished part in output buffer
                 idle_start = idle_stop = 0
                 if self.m < self.system.M-1:
                     idle_start = self.env.now - G.warmup_time
+                    while self.out_buff.level > self.out_buff.capacity:
+                        yield self.timeout(1)
+                        self.write_state()
                     yield self.out_buff.put(1)
                     idle_stop = self.env.now - G.warmup_time
                     self.has_part = False
@@ -95,12 +105,16 @@ class Machine:
                 if idle_stop - idle_start > 0:
                     self.system.machine_data.loc[idle_start:idle_stop, 
                                                  self.name+' forced idle'] = 1
+                    print('M{} idle at time {}'.format(self.m, self.env.now))
                     
+                  
                 if self.env.now > G.warmup_time:
                     self.parts_made += 1
                     # TODO: record parts made
                     prev_part = self.env.now
-            
+                
+                self.write_state()
+                
             except simpy.Interrupt: 
                 # processing interrupted due to failure
                 self.broken = True
@@ -153,30 +167,36 @@ class Machine:
                     if self.repairman.count() == 0:
                         # only interrupt processing if repairman available
                         self.process.interrupt()
-                    
+    
     def write_data(self):
+        self.write_state()
+    
+    def write_state(self):
         '''
-        Record all real-time state data at each time step.
+        Record the system state for this machine when called.
         '''
         t = self.env.now
         
+        #if self.m == 1:
+        #    print('Writing M1 state at t={}, state={}'.format(self.env.now, int(self.has_part)))
+        
         # machine status
         if self.has_part:
-            self.system.state_data.loc[t, self.name+' has_part'] = 1
+            self.system.state_data.loc[t, self.name+' has part'] = 1
         else:
-            self.system.state_data.loc[t, self.name+' has_part'] = 0
+            self.system.state_data.loc[t, self.name+' has part'] = 0
         
-        self.system.production_data.loc[t, self.name+' production'] = self.parts_made
+        #self.system.production_data.loc[t, self.name+' production'] = self.parts_made
         
-        if self.failed:
-            self.system.machine_data.loc[t, self.name+' functional'] = 0
-        else:
-            self.system.machine_data.loc[t, self.name+' functional'] = 1
+        #if self.failed:
+        #    self.system.machine_data.loc[t, self.name+' functional'] = 0
+        #else:
+        #    self.system.machine_data.loc[t, self.name+' functional'] = 1
             
         
         
         # buffer status
-        
-        # queue status
-            
+        if self.m < (self.system.M - 1): # not the last machine
+            level = self.out_buff.level
+            self.system.state_data.loc[t, 'b'+str(self.m)+' level'] = level
         

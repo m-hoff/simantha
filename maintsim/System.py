@@ -110,15 +110,15 @@ class System:
             machine_cols += [machine.name+' functional', machine.name+' forced idle']
             
             
-        self.state_data = pd.DataFrame(columns=state_cols)
-        self.production_data = pd.DataFrame(columns=prod_cols)
-        self.machine_data = pd.DataFrame(columns=machine_cols)        
-        self.queue_data = pd.DataFrame(columns=['time', 'contents'])
+        self.state_data = pd.DataFrame(columns=state_cols) #TODO: write state data
+        self.production_data = pd.DataFrame(columns=prod_cols) #TODO: write production data
+        self.machine_data = pd.DataFrame(columns=machine_cols) #TODO: write machine data
+        self.queue_data = pd.DataFrame(columns=['time', 'contents']) #TODO: write queue data
         self.maintenance_data = pd.DataFrame(columns=['time',
                                                       'machine',
                                                       'type',
                                                       'activity',
-                                                      'duration'])
+                                                      'duration']) #TODO: write maint data
         
     def simulate(self, title='Simulation',
                  warmup_time=0,
@@ -130,7 +130,7 @@ class System:
         if seed:
             random.seed(seed)
             
-        self.initialize()
+        self.initialize() # reinitialize system
         
         self.env.run(until=warmup_time+sim_time)   
 
