@@ -544,7 +544,7 @@ class Scenario:
 
 
         # start timer
-        start_time = time.time()
+        self.start_time = time.time()
 
         if self.p.RANDOM_SEED is not 'none':
             random.seed(self.p.RANDOM_SEED)
@@ -652,9 +652,10 @@ class Scenario:
         if summary:
             print()
             print(self.summary_data)
-            print('\n Bottleneck machine idle for {} time units.'.format(
-                    sum(1-self.production_data.loc[0:,'M2 processing'])
-            ))
+            #print('\n Bottleneck machine idle for {} time units.'.format(
+            #        sum(1-self.production_data.loc[0:,'M2 processing'])
+            print()
+            print('Simulation completed in {:.2f}s'.format(time.time()-self.start_time))
 
         if get_costs:
             return cbm_maintenance_cost, cm_maintenance_cost, lost_production_cost, self.policy_cost
