@@ -54,7 +54,6 @@ class Machine:
         
         self.process = self.env.process(self.working(self.repairman))
         self.env.process(self.degrade())
-        #self.env.process(self.record_data())
         
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -69,33 +68,7 @@ class Machine:
                 
             except simpy.Interrupt:
                 pass
-                
-    def record_data(self):
-        '''
-        Record simulation data at each time step.
-        '''
-        while True:
-            try:
-                t = self.env.now 
-                
-                # machine/buffer contents
-                if self.has_part:
-                    self.system.state_data.loc[t, self.name+' has part'] = 1
-                else:
-                    self.system.state_data.loc[t, self.name+' has part'] = 0
-                
-                if self.m < (self.system.M - 1): # not the last machine
-                    level = self.out_buff.level
-                    self.system.state_data.loc[t, 'b'+str(self.m)+' level'] = level
-                
-                # production data
-                self.system.production_data.loc[t, 'M{} production'.format(self.m)] = self.parts_made
-                
-                yield self.env.timeout(1)
-                
-            except simpy.Interrupt:
-                pass
-                
+
     def working(self, repairman):
         '''
         Main production function. Machine will produce parts
@@ -104,6 +77,7 @@ class Machine:
         prev_part = 0
         while True:
             try:
+                #if self.m==0: print('working...t={}'.format(self.env.now))
                 idle_start = idle_stop = 0
                 
                 # get part from input buffer
@@ -124,7 +98,7 @@ class Machine:
                 self.has_part = True
                 
                 self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
-                                                                        
+                 
                 self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
@@ -137,7 +111,7 @@ class Machine:
                 for t in range(self.process_time):
                     # TODO: record processing
                     #self.write_state()
-                                       
+
                     yield self.env.timeout(1)
                     self.remaining_process_time -= 1
                                                             
@@ -183,14 +157,30 @@ class Machine:
                 # TODO: fix this
                 #time_to_repair = 10
                 
+                # check if part was finished before failure occured
+                if (self.remaining_process_time == 1) and (self.out_buff.level < self.out_buff.capacity):
+                    # part was finished before failure
+                    if self.m < self.system.M-1:
+                        #idle_start = self.env.now - self.system.warmup_time
+                        
+                        yield self.out_buff.put(1)
+                        self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
+                    
+                    if self.env.now > self.system.warmup_time:
+                        self.parts_made += 1
+                    
+                    self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
+                    
+                    self.has_part = False
+                    
                 maintenance_start = self.env.now
-                
+               
                 # write failure data
                 new_failure = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
-                                            'duration':['']})
+                                    00        'duration':['']})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
                                             
                 
@@ -213,7 +203,7 @@ class Machine:
                 
                 maintenance_stop = self.env.now
                 
-                self.system.machine_data.loc[maintenance_start:maintenance_stop, 'M{} functional'.format(self.m)] = 0
+                self.system.machine_data.loc[maintenance_start:maintenance_stop-1, 'M{} functional'.format(self.m)] = 0
                 
                 # write repair data
                 new_repair = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
@@ -286,37 +276,3 @@ class Machine:
                         # only interrupt processing if repairman available
                         #print('M{} calling repairman at {}'.format(self.m, self.env.now))
                         self.process.interrupt()
-                                                
-    
-    def write_data(self):
-        self.write_state()
-    
-    def write_state(self):
-        '''
-        Record the system state for this machine when called.
-        '''
-        t = self.env.now
-        
-        #if self.m == 1:
-        #    print('Writing M1 state at t={}, state={}'.format(self.env.now, int(self.has_part)))
-        
-        # machine status
-        if self.has_part:
-            self.system.state_data.loc[t, self.name+' has part'] = 1
-        else:
-            self.system.state_data.loc[t, self.name+' has part'] = 0
-        
-        #self.system.production_data.loc[t, self.name+' production'] = self.parts_made
-        
-        #if self.failed:
-        #    self.system.machine_data.loc[t, self.name+' functional'] = 0
-        #else:
-        #    self.system.machine_data.loc[t, self.name+' functional'] = 1
-            
-        
-        
-        # buffer status
-        if self.m < (self.system.M - 1): # not the last machine
-            level = self.out_buff.level
-            self.system.state_data.loc[t, 'b'+str(self.m)+' level'] = level
-        

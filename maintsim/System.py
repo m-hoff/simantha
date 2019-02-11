@@ -24,7 +24,7 @@ class System:
                  planned_failures=None, # list of (loc, time, duration)
                  maintenance_policy=None, # CM/PM/CBM, str
                  maintenance_params=None, # define policy
-                 maintenance_capacity=1,
+                 maintenance_capacity=None,
                  maintenance_costs=None,
                  debug=False):
 
@@ -54,7 +54,10 @@ class System:
         self.planned_failures = planned_failures
         self.maintenance_policy = maintenance_policy
         self.maintenance_params = maintenance_params
-        self.maintenance_capacity = maintenance_capacity
+        if maintenance_capacity:
+            self.maintenance_capacity = maintenance_capacity
+        else:
+            self.maintenance_capacity = len(process_times)
         self.maintenance_costs = maintenance_costs
 
         # inferred system characteristics
@@ -159,18 +162,33 @@ class System:
             self.data[key]['time'] = list(range(-self.warmup_time, self.sim_time))
        
         # run simulation
-        self.env.run(until=warmup_time+sim_time)   
-        #test comment
-        # fill in data frames
+        self.env.run(until=warmup_time+sim_time+1)   
         
-        self.data['state'].fillna(method='ffill', inplace=True)
+        # clean data frames
+        #     state data
+        self.state_data.fillna(method='ffill', inplace=True)
+        self.state_data.fillna(0, inplace=True)
+        #TODO: check df datatypes 
         
+        #     production data
         self.data['production'].fillna(method='ffill', inplace=True)
         self.data['production'].fillna(0, inplace=True)
         for m in range(self.M):
             TH_col = 'M{} throughput'.format(m)
             self.data['production'][TH_col] = self.data['production']['M{} production'.format(m)]/self.data['production']['time']
-                
+        
+        #     machine data
+        for m in range(self.M):
+            col1 = 'M{} functional'.format(m)
+            self.machine_data[col1] = self.machine_data[col1].fillna(1)
+            
+            col2 = 'M{} forced idle'.format(m)
+            self.machine_data[col2] = self.machine_data[col2].fillna(0)
+        
+        #     queue data
+        #TODO: record queue data
+        
+        #     maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)
         self.maintenance_data.reset_index(inplace=True, drop=True)
         
