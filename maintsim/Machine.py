@@ -52,8 +52,8 @@ class Machine:
         self.remaining_process_time = self.process_time
         self.parts_made = 0
         
-        self.process = self.env.process(self.working(self.repairman))
-        self.env.process(self.degrade())
+        self.process = self.env.process(self.working(self.system.repairman))
+        self.env.process(self.degrade(self.system.repairman))
         
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -63,7 +63,7 @@ class Machine:
         while True:
             try:
                 if self.m == 0:
-                    print(self.repairman.count)
+                    print(self.env.now, self.system.repairman.queue)
                 yield self.env.timeout(1)
                 
             except simpy.Interrupt:
@@ -180,7 +180,7 @@ class Machine:
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
-                                    00        'duration':['']})
+                                            'duration':['']})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
                                             
                 
@@ -190,9 +190,11 @@ class Machine:
                 #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'failure'
                                 
                 # TODO: get priority
-                with repairman.request(priority=1) as req:
+                with self.system.repairman.request(priority=1) as req:
                     yield req
-                    yield self.env.timeout(self.time_to_repair)
+                    for t in range(self.time_to_repair):
+                        yield self.env.timeout(1)
+                        #print(self.system.repairman.users)
                     # TODO: record maintenance data
                     
                     # repairman is released
@@ -220,7 +222,7 @@ class Machine:
                 
                 # TODO: record more maintenance data
     
-    def degrade(self):
+    def degrade(self, repairman):
         '''
         Discrete state degradation process. 
         '''
@@ -229,12 +231,18 @@ class Machine:
             while random() > self.degradation:
                 # do NOT degrade
                 yield self.env.timeout(1)
-                # TODO: check planned failures
+                
+                # check planned failures
                 for failure in self.planned_failures:
                     if failure[1] == self.env.now:
-                        #print('Planned failure on {} at {} for {}'.format(self.m, self.env.now, failure[2]))
                         self.time_to_repair = failure[2]
                         self.repair_type = 'planned'
+                        
+                        #with self.system.repairman.request(priority=self.m) as req:
+                        #    print('M{} request at {}'.format(self.m, self.env.now))
+                        #    yield req
+                        #    
+                        #    print('started at {}'.format(self.env.now))
                         self.process.interrupt()
             
             # degrade by one unit once loop breaks
@@ -254,10 +262,11 @@ class Machine:
                     #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'failure'
                     
                     self.in_maintenance_queue = True
-                    self.time_to_repair = 10
+                    self.time_to_repair = 10 #TODO: fix this
                     self.process.interrupt()
                     
                 elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
+                    # hit CBM threshold, schedule maintenance
                     # TODO schedule preventive maintenance
                     self.repair_type = 'CBM'
                     
