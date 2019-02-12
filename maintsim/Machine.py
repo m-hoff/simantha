@@ -180,7 +180,7 @@ class Machine:
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
-                                    00        'duration':['']})
+                                            'duration':['']})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
                                             
                 
