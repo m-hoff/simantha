@@ -1,4 +1,7 @@
 
+**/__pycache__/
+**/.ipynb_checkpoints
+
 mow_demo2.ipynb
 
 simpy_test.ipynb
