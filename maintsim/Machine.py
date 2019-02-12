@@ -83,7 +83,7 @@ class Machine:
                 # get part from input buffer
                 if self.m > 0: 
                     #self.write_data()
-                    idle_start = self.env.now - G.warmup_time
+                    idle_start = self.env.now - self.system.warmup_time
                     #while self.in_buff.level == 0:
                         #yield self.env.timeout(1)
                         #self.write_state()
@@ -93,7 +93,7 @@ class Machine:
                     
                     #print('M{} got part from buffer at {}, b={}'.format(self.m, self.env.now, self.in_buff.level))
                                        
-                    idle_stop = self.env.now - G.warmup_time
+                    idle_stop = self.env.now - self.system.warmup_time
 
                 self.has_part = True
                 
@@ -103,8 +103,8 @@ class Machine:
                     
                 # check if machine was starved
                 if idle_stop - idle_start > 0:
-                    #print('M{} idle at time {}'.format(self.m, self.env.now))
-                    self.system.machine_data.loc[idle_start:idle_stop, 
+                    if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, idle_start, idle_stop))
+                    self.system.machine_data.loc[idle_start:idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     
                 # process part
@@ -139,11 +139,11 @@ class Machine:
                     
                 # check if machine was blocked
                 if idle_stop - idle_start > 0:
-                    self.system.machine_data.loc[idle_start:idle_stop, 
+                    self.system.machine_data.loc[idle_start:idle_stop-1, 
                                                  self.name+' forced idle'] = 1
-                    #print('M{} idle at time {}'.format(self.m, self.env.now))
+                    if self.m == 1: print('M{} blocked from t={} to t={}'.format(self.m, idle_start, idle_stop))
                                       
-                #if self.env.now > G.warmup_time:
+                #TODO: idle time is not recorded if failure occurs during starvation or blockage
 
                                 
                 # TODO: record parts made
@@ -157,20 +157,24 @@ class Machine:
                 # TODO: fix this
                 #time_to_repair = 10
                 
-                # check if part was finished before failure occured
-                if (self.remaining_process_time == 1) and (self.out_buff.level < self.out_buff.capacity):
+                # check if part was finished before failure occured                
+                if self.remaining_process_time == 1: 
+                    if self.m == self.system.M-1:
+                        if self.env.now > self.system.warmup_time:
+                            self.parts_made += 1
+                    elif self.out_buff.level < self.out_buff.capacity:
                     # part was finished before failure
-                    if self.m < self.system.M-1:
-                        #idle_start = self.env.now - self.system.warmup_time
+                        if self.m < self.system.M-1:
+                            #idle_start = self.env.now - self.system.warmup_time
+                            
+                            yield self.out_buff.put(1)
+                            self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
                         
-                        yield self.out_buff.put(1)
-                        self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
-                    
-                    if self.env.now > self.system.warmup_time:
-                        self.parts_made += 1
-                    
+                        if self.env.now > self.system.warmup_time:
+                            self.parts_made += 1
+                        
                     self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
-                    
+                        
                     self.has_part = False
                     
                 maintenance_start = self.env.now
