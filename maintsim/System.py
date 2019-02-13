@@ -4,9 +4,6 @@ import pandas as pd
 from graphviz import Digraph
 
 from Machine import Machine
-# import Buffer
-# import Source
-# import Sink
 
 class System:
     '''
@@ -17,39 +14,57 @@ class System:
                  interarrival_time=1, # int
                  buffer_sizes=1, # list or int
                  initial_buffer=0,
-
-                 failures={'degradation':None, # list 
-                           'reliability':None}, # scipy distributions
-                 degradation=None, # list or int of degradation rate
+                 
+                 failure_mode=None,
+                 failure_params=None,
                  planned_failures=None, # list of (loc, time, duration)
+                 
                  maintenance_policy=None, # CM/PM/CBM, str
                  maintenance_params=None, # define policy
                  maintenance_capacity=None,
                  maintenance_costs=None,
+                 
                  debug=False):
-
+        
+        # inferred system characteristics
+        self.M = len(process_times) # number of machines
+        self.bottleneck_process_time = max(process_times)
+        self.bottleneck = process_times.index(self.bottleneck_process_time)
+                
         # specified system characteristics
         self.process_times = process_times
         self.interarrival_time = interarrival_time        
         if type(buffer_sizes) == int:
-            self.buffer_sizes = [buffer_sizes]*(len(process_times)-1)
+            self.buffer_sizes = [buffer_sizes]*(self.M-1)
         else:
             self.buffer_sizes = buffer_sizes
            
         if type(initial_buffer) == int:
-            self.initial_buffer = [initial_buffer]*(len(process_times)-1)
+            self.initial_buffer = [initial_buffer]*(self.M-1)
         else:
             self.initial_buffer = initial_buffer
         
-        self.failures = failures    
-        #if type(degradation) == int:
-        #    self.degradation = [degradation]*(len(process_times))
-        #else:
+        self.failure_mode = failure_mode
+        self.failure_params = failure_params
+        if self.failure_mode:
+            if self.failure_mode == 'degradation': # Markov degradation
+                if type(failure_params) == int:
+                    self.degradation = [failure_params]*self.M
+                else:
+                    self.degradation = failure_params
+            elif self.failure_mode == 'reliability': # TTF distribution
+                if len(failure_params) == 1:
+                    self.reliability = [failure_params]*self.M
+                else:
+                    self.reliability = failure_params
+            else: # no degradation
+                self.failure_mode = 'degradation'
+                self.failure_params = [0]*self.M
+        #self.failures = failures    
+        #if degradation:
         #    self.degradation = degradation
-        if degradation:
-            self.degradation = degradation
-        else:
-            self.degradation = [0]*len(process_times)
+        #else:
+        #    self.degradation = [0]*len(process_times)
         
         self.planned_failures = planned_failures
         self.maintenance_policy = maintenance_policy
@@ -57,14 +72,9 @@ class System:
         if maintenance_capacity:
             self.maintenance_capacity = maintenance_capacity
         else:
-            self.maintenance_capacity = len(process_times)
+            self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
 
-        # inferred system characteristics
-        self.M = len(process_times) # number of machines
-        self.bottleneck_process_time = max(self.process_times)
-        self.bottleneck = self.process_times.index(self.bottleneck_process_time)
-        
         self.debug = debug
         
         self.initialize() # initialize system objects
@@ -104,9 +114,10 @@ class System:
             
             # machine objects
             process_time = self.process_times[m]
-            self.machines += [Machine(self.env, m, process_time, self.degradation[m],
-                                      planned_failures_m, self, self.repairman)]
-
+            #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
+            #                          planned_failures_m, self, self.repairman)]
+            self.machines += [Machine(self.env, m, process_time, planned_failures_m,
+                              self.failure_mode, self.failure_params[m], self, self.repairman)]
                                       
         # initialize system data collection
         state_cols = ['time']     # system state data

@@ -2,24 +2,32 @@ import simpy
 import pandas as pd
 from random import random
 
-from Globals import G
-
 class Machine:
     def __init__(self, 
                  env, 
                  m, 
                  process_time, 
-                 degradation, 
+                 #degradation, 
                  planned_failures,
+                 failure_mode,
+                 failure_params,
                  system, 
                  repairman):
                  
         self.env = env
         self.m = m
         self.name = 'M{}'.format(self.m)
+        
         self.process_time = process_time
-        self.degradation = degradation
+        
+        #self.degradation = degradation
         self.planned_failures = planned_failures
+        self.failure_mode = failure_mode
+        if self.failure_mode == 'degradation': # Markov degradation
+            self.degradation = failure_params
+        else: # TTF distribution
+            self.ttf_dist = failure_params
+            
         self.system = system
         self.repairman = repairman
         
@@ -53,7 +61,10 @@ class Machine:
         self.parts_made = 0
         
         self.process = self.env.process(self.working(self.system.repairman))
-        self.env.process(self.degrade(self.system.repairman))
+        if self.failure_mode == 'degradation':
+            self.env.process(self.degrade(self.system.repairman))
+        elif self.failure_mode == 'reliability':
+            self.env.process(self.reliability())
         #self.env.process(self.maintain())
         
         if self.system.debug:
@@ -118,7 +129,7 @@ class Machine:
                 # put finished part in output buffer
                 idle_start = idle_stop = 0
                 if self.m < self.system.M-1:
-                    idle_start = self.env.now - G.warmup_time
+                    idle_start = self.env.now - self.system.warmup_time
                     #while self.out_buff.level >= self.out_buff.capacity:
                         #yield self.env.timeout(1)
                         #self.write_state()
@@ -128,7 +139,7 @@ class Machine:
                     
                     #print('M{} put part in buffer at {}, b={}'.format(self.m, self.env.now, self.out_buff.level))
                     
-                    idle_stop = self.env.now - G.warmup_time
+                    idle_stop = self.env.now - self.system.warmup_time
                 
                 if self.env.now > self.system.warmup_time:
                     self.parts_made += 1
@@ -204,6 +215,8 @@ class Machine:
                 #    yield req
                 #    print('Request granted to M{} at t={}'.format(self.m, self.env.now))
                 
+                self.time_to_repair = 10
+                
                 yield self.env.timeout(self.time_to_repair)
                 #for t in range(self.time_to_repair):
                 #    yield self.env.timeout(1)
@@ -235,9 +248,43 @@ class Machine:
                 #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'repair'
                 #self.system.maintenance_data.loc[self.env.now, 'duration'] = maintenance_stop - maintenance_start
     
+    def reliability(self):
+        '''
+        Machine failures based on TTF distribution
+        '''
+                
+        while True:
+            # check for planned failures
+            for failure in self.planned_failures:
+                #TODO: make this a method
+                if failure[1] == self.env.now:
+                    self.time_to_repair = failure[2]
+                    self.repair_type = 'planned'
+                    '''
+                    Here we create a maintenance request without interrupting
+                    the machine's processing. The process is only interrupted
+                    once it seizes a maintenance resource and the job begins.
+                    '''                   
+                    #THIS METHOD WORKS
+                    self.maintenance_request = self.system.repairman.request(priority=1)
+                    
+                    yield self.maintenance_request # wait for repairman to become available
+                    self.process.interrupt()
+                    
+            if not self.failed:
+                # generate TTF
+                ttf = self.ttf_dist.rvs()
+                yield self.env.timeout(ttf)
+                self.failed = True
+                self.repair_type = 'CM'
+                
+                self.process.interrupt()
+            else:
+                yield self.env.timeout(1) #TODO: check the placement of this
+            
     def degrade(self, repairman):
         '''
-        Discrete state degradation process. 
+        Discrete state Markovian degradation process. 
         '''
         while True:
             # TODO: incorporate markov chain degradation
