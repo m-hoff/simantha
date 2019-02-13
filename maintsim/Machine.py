@@ -56,9 +56,11 @@ class Machine:
         self.failed = False
         self.repair_type = None
         # production state
+        self.idle = True
         self.has_part = False
         self.remaining_process_time = self.process_time
         self.parts_made = 0
+        self.total_downtime = 0 # blockage+startvation+repairs
         
         self.process = self.env.process(self.working(self.system.repairman))
         if self.failure_mode == 'degradation':
@@ -90,12 +92,13 @@ class Machine:
         while True:
             try:
                 #if self.m==0: print('working...t={}'.format(self.env.now))
-                idle_start = idle_stop = 0
+                self.idle_start = self.idle_stop = 0
+                self.idle = True
                 
                 # get part from input buffer
                 if self.m > 0: 
                     #self.write_data()
-                    idle_start = self.env.now - self.system.warmup_time
+                    self.idle_start = self.env.now# - self.system.warmup_time
                     #while self.in_buff.level == 0:
                         #yield self.env.timeout(1)
                         #self.write_state()
@@ -104,21 +107,26 @@ class Machine:
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m-1)] = self.in_buff.level
                     
                     #print('M{} got part from buffer at {}, b={}'.format(self.m, self.env.now, self.in_buff.level))
-                                       
-                    idle_stop = self.env.now - self.system.warmup_time
-
+                    
+                    self.idle_stop = self.env.now# - self.system.warmup_time
+                    
                 self.has_part = True
+                self.idle = False
                 
                 self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
                  
                 self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
-                if idle_stop - idle_start > 0:
+                if self.idle_stop - self.idle_start > 0:
                     #if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, idle_start, idle_stop))
-                    self.system.machine_data.loc[idle_start:idle_stop-1, 
+                    self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     
+                    if self.env.now > self.system.warmup_time:
+                        #if self.m==1: print('adding DT={} at t={}'.format(self.idle_stop-self.idle_start,self.env.now))
+                        self.total_downtime += self.idle_stop - self.idle_start
+                
                 # process part
                 for t in range(self.process_time):
                     # TODO: record processing
@@ -127,9 +135,10 @@ class Machine:
                     self.remaining_process_time -= 1
                                      
                 # put finished part in output buffer
-                idle_start = idle_stop = 0
+                self.idle_start = self.env.now# - self.system.warmup_time#self.idle_stop = 0
+                self.idle = True
                 if self.m < self.system.M-1:
-                    idle_start = self.env.now - self.system.warmup_time
+                    idle_start = self.env.now# - self.system.warmup_time
                     #while self.out_buff.level >= self.out_buff.capacity:
                         #yield self.env.timeout(1)
                         #self.write_state()
@@ -139,7 +148,8 @@ class Machine:
                     
                     #print('M{} put part in buffer at {}, b={}'.format(self.m, self.env.now, self.out_buff.level))
                     
-                    idle_stop = self.env.now - self.system.warmup_time
+                    self.idle_stop = self.env.now# - self.system.warmup_time
+                    self.idle = False
                 
                 if self.env.now > self.system.warmup_time:
                     self.parts_made += 1
@@ -147,13 +157,16 @@ class Machine:
                 
                 #print('Prod', self.env.now, self.m, self.parts_made)
                 self.has_part = False
-                    
+                 
+                 
                 # check if machine was blocked
-                if idle_stop - idle_start > 0:
-                    self.system.machine_data.loc[idle_start:idle_stop-1, 
+                if self.idle_stop - self.idle_start > 0:
+                    self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
-                    #if self.m == 1: print('M{} blocked from t={} to t={}'.format(self.m, idle_start, idle_stop))
-                                      
+                    if self.env.now > self.system.warmup_time:
+                        #if self.m==1: print('adding DT={} at t={}'.format(self.idle_stop-self.idle_start,self.env.now))
+                        self.total_downtime += self.idle_stop - self.idle_start
+                    
                 #TODO: idle time is not recorded if failure occurs during starvation or blockage
 
                                 
@@ -162,6 +175,7 @@ class Machine:
                                 
             except simpy.Interrupt: 
                 # processing interrupted due to failure
+                failure_start = self.env.now
                 if self.failed:
                     # create maintenance request (after stopping production)
                     self.maintenance_request = self.system.repairman.request(priority=1)
@@ -169,7 +183,7 @@ class Machine:
                     
                 self.broken = True
                 self.has_part = False
-                
+                                
                 # TODO: fix this
                 #time_to_repair = 10
                 
@@ -215,7 +229,7 @@ class Machine:
                 #    yield req
                 #    print('Request granted to M{} at t={}'.format(self.m, self.env.now))
                 
-                self.time_to_repair = 10
+                #self.time_to_repair = 10
                 
                 yield self.env.timeout(self.time_to_repair)
                 #for t in range(self.time_to_repair):
@@ -243,6 +257,20 @@ class Machine:
                                            'duration':[maintenance_stop-maintenance_start]})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_repair)
                 
+                failure_stop = self.env.now
+                #print(failure_start, failure_stop)
+                #a = failure_stop-failure_start
+                #print(failure_stop-failure_start)
+                #print(a)
+                
+                if self.env.now > self.system.warmup_time:
+                    #print('adding DT={} at t={} at M{}'.format(failure_stop-failure_start,self.env.now, self.m))
+                    self.total_downtime += failure_stop - failure_start
+                
+                # machine was idle before failure
+                #print('M{} idle due to failure from t={} to t={}'.format(self.m, failure_start, failure_stop))
+                self.system.machine_data.loc[self.idle_start:failure_stop-1, 
+                                             self.name+' forced idle'] = 1
                 #self.system.maintenance_data.loc[self.env.now, 'machine'] = self.m
                 #self.system.maintenance_data.loc[self.env.now, 'type'] = self.repair_type
                 #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'repair'

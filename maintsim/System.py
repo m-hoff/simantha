@@ -57,9 +57,9 @@ class System:
                     self.reliability = [failure_params]*self.M
                 else:
                     self.reliability = failure_params
-            else: # no degradation
-                self.failure_mode = 'degradation'
-                self.failure_params = [0]*self.M
+        else: # no degradation
+            self.failure_mode = 'degradation'
+            self.failure_params = [0]*self.M
         #self.failures = failures    
         #if degradation:
         #    self.degradation = degradation
