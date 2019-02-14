@@ -21,8 +21,9 @@ class System:
                  
                  maintenance_policy=None, # CM/PM/CBM, str
                  maintenance_params=None, # define policy
+                 repair_params=None,
                  maintenance_capacity=None,
-                 maintenance_costs=None,
+                 maintenance_costs=None, # dict of cost by job type
                  
                  debug=False):
         
@@ -60,6 +61,9 @@ class System:
         else: # no degradation
             self.failure_mode = 'degradation'
             self.failure_params = [0]*self.M
+            
+        self.repair_params = repair_params
+            
         #self.failures = failures    
         #if degradation:
         #    self.degradation = degradation

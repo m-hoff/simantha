@@ -6,8 +6,7 @@ class Machine:
     def __init__(self, 
                  env, 
                  m, 
-                 process_time, 
-                 #degradation, 
+                 process_time,
                  planned_failures,
                  failure_mode,
                  failure_params,
@@ -52,6 +51,7 @@ class Machine:
         # set initial machine state
         # maintenance state
         self.health = 0 # starts in perfect health
+        self.last_repair = None
         self.in_maintenance_queue = False
         self.failed = False
         self.repair_type = None
@@ -67,7 +67,7 @@ class Machine:
             self.env.process(self.degrade(self.system.repairman))
         elif self.failure_mode == 'reliability':
             self.env.process(self.reliability())
-        #self.env.process(self.maintain())
+        # self.env.process(self.maintain())
         
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -129,8 +129,6 @@ class Machine:
                 
                 # process part
                 for t in range(self.process_time):
-                    # TODO: record processing
-                    #self.write_state()
                     yield self.env.timeout(1)
                     self.remaining_process_time -= 1
                                      
@@ -139,9 +137,6 @@ class Machine:
                 self.idle = True
                 if self.m < self.system.M-1:
                     idle_start = self.env.now# - self.system.warmup_time
-                    #while self.out_buff.level >= self.out_buff.capacity:
-                        #yield self.env.timeout(1)
-                        #self.write_state()
                         
                     yield self.out_buff.put(1)
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
@@ -155,10 +150,8 @@ class Machine:
                     self.parts_made += 1
                 self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
                 
-                #print('Prod', self.env.now, self.m, self.parts_made)
                 self.has_part = False
-                 
-                 
+                
                 # check if machine was blocked
                 if self.idle_stop - self.idle_start > 0:
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
@@ -166,11 +159,7 @@ class Machine:
                     if self.env.now > self.system.warmup_time:
                         #if self.m==1: print('adding DT={} at t={}'.format(self.idle_stop-self.idle_start,self.env.now))
                         self.total_downtime += self.idle_stop - self.idle_start
-                    
-                #TODO: idle time is not recorded if failure occurs during starvation or blockage
-
-                                
-                # TODO: record parts made
+                
                 prev_part = self.env.now
                                 
             except simpy.Interrupt: 
@@ -210,11 +199,15 @@ class Machine:
                 maintenance_start = self.env.now
                
                 # write failure data
+                if self.last_repair:
+                    TTF = self.env.now - self.last_repair
+                else:
+                    TTF = 'NA'
                 new_failure = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
-                                            'duration':['']})
+                                            'duration':[TTF]})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
                                             
                 
@@ -229,18 +222,20 @@ class Machine:
                 #    yield req
                 #    print('Request granted to M{} at t={}'.format(self.m, self.env.now))
                 
-                #self.time_to_repair = 10
+                # generate TTR based on repair type
+                if self.repair_type is not 'planned':
+                    self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
                 
                 yield self.env.timeout(self.time_to_repair)
                 #for t in range(self.time_to_repair):
                 #    yield self.env.timeout(1)
                         #print(self.system.repairman.users)
-                    # TODO: record maintenance data
                     
                 # repairman is released
                 self.system.repairman.release(self.maintenance_request)
                 
                 self.health = 0
+                self.last_repair = self.env.now
                 self.failed = False
                 self.broken = False
                 self.in_maintenance_queue = False
@@ -271,16 +266,11 @@ class Machine:
                 #print('M{} idle due to failure from t={} to t={}'.format(self.m, failure_start, failure_stop))
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
                                              self.name+' forced idle'] = 1
-                #self.system.maintenance_data.loc[self.env.now, 'machine'] = self.m
-                #self.system.maintenance_data.loc[self.env.now, 'type'] = self.repair_type
-                #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'repair'
-                #self.system.maintenance_data.loc[self.env.now, 'duration'] = maintenance_stop - maintenance_start
-    
+                
     def reliability(self):
         '''
         Machine failures based on TTF distribution
-        '''
-                
+        '''        
         while True:
             # check for planned failures
             for failure in self.planned_failures:
@@ -292,8 +282,7 @@ class Machine:
                     Here we create a maintenance request without interrupting
                     the machine's processing. The process is only interrupted
                     once it seizes a maintenance resource and the job begins.
-                    '''                   
-                    #THIS METHOD WORKS
+                    '''                  
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     
                     yield self.maintenance_request # wait for repairman to become available
@@ -315,7 +304,6 @@ class Machine:
         Discrete state Markovian degradation process. 
         '''
         while True:
-            # TODO: incorporate markov chain degradation
             while random() > self.degradation:
                 # do NOT degrade
                 yield self.env.timeout(1)
@@ -354,7 +342,7 @@ class Machine:
                     #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'failure'
                     
                     self.in_maintenance_queue = True
-                    self.time_to_repair = 10 #TODO: fix this
+                    #self.time_to_repair = 10 #TODO: fix this
                     self.process.interrupt()
                     
                 elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
