@@ -256,7 +256,7 @@ class Machine:
                 #print('M{} idle due to failure from t={} to t={}'.format(self.m, failure_start, failure_stop))
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
                                              self.name+' forced idle'] = 1
-                
+    
     def reliability(self):
         '''
         Machine failures based on TTF distribution. 

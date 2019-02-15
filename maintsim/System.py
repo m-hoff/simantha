@@ -76,6 +76,7 @@ class System:
         if maintenance_capacity:
             self.maintenance_capacity = maintenance_capacity
         else:
+            # no capacity by default
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
 
