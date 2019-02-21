@@ -23,5 +23,4 @@ maintsim/concurrent downtime demo.ipynb
 maintsim/degradation.py
 maintsim/Simpy demo.ipynb
 maintsim/system viz.ipynb
-maintsim/demo.ipynb
 maintsim/demo.html

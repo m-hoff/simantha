@@ -189,11 +189,7 @@ class Machine:
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
-<<<<<<< HEAD
-                                            'duration':['']})
-=======
                                             'duration':[TTF]})
->>>>>>> condition-based
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
              
                 #TODO: get priority
