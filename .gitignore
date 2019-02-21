@@ -1,0 +1,27 @@
+**/.idea/
+**/__pycache__/
+**/.ipynb_checkpoints
+
+mow_demo2.ipynb
+
+simpy_test.ipynb
+
+maintsim/test.ipynb
+
+*.csv
+
+maintsim/.ipynb_checkpoints/test-checkpoint.ipynb
+maintsim.py
+simpy_test.ipynb
+maintsim_example.html
+maintsim_example.ipynb
+mow_demo.ipynb
+mow_demo2.ipynb
+pm_reliability.ipynb
+pmow_demo.ipynb
+maintsim/concurrent downtime demo.ipynb
+maintsim/degradation.py
+maintsim/Simpy demo.ipynb
+maintsim/system viz.ipynb
+maintsim/demo.ipynb
+maintsim/demo.html
