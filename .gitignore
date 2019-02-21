@@ -11,7 +11,7 @@ maintsim/test.ipynb
 *.csv
 
 maintsim/.ipynb_checkpoints/test-checkpoint.ipynb
-
+maintsim.py
 simpy_test.ipynb
 maintsim_example.html
 maintsim_example.ipynb
@@ -23,3 +23,5 @@ maintsim/concurrent downtime demo.ipynb
 maintsim/degradation.py
 maintsim/Simpy demo.ipynb
 maintsim/system viz.ipynb
+maintsim/demo.ipynb
+maintsim/demo.html
