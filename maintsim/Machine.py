@@ -19,7 +19,6 @@ class Machine:
         
         self.process_time = process_time
         
-        #self.degradation = degradation
         self.planned_failures = planned_failures
         self.failure_mode = failure_mode
         if self.failure_mode == 'degradation': # Markov degradation
@@ -60,7 +59,7 @@ class Machine:
         self.has_part = False
         self.remaining_process_time = self.process_time
         self.parts_made = 0
-        self.total_downtime = 0 # blockage+startvation+repairs
+        self.total_downtime = 0 # blockage + startvation + repairs
         
         self.process = self.env.process(self.working(self.system.repairman))
         if self.failure_mode == 'degradation':
@@ -73,7 +72,6 @@ class Machine:
             self.env.process(self.debug_process())
                 
     def debug_process(self):
-    #TODO: use a similar process to write data
         while True:
             try:
                 if self.m == 0:
@@ -93,24 +91,15 @@ class Machine:
         prev_part = 0
         while True:
             try:
-                #if self.m==0: print('working...t={}'.format(self.env.now))
                 self.idle_start = self.idle_stop = 0
                 self.idle = True
                 
                 # get part from input buffer
-                if self.m > 0: 
-                    #self.write_data()
-                    self.idle_start = self.env.now# - self.system.warmup_time
-                    #while self.in_buff.level == 0:
-                        #yield self.env.timeout(1)
-                        #self.write_state()
-                        
+                if self.m > 0:
                     yield self.in_buff.get(1)
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m-1)] = self.in_buff.level
                     
-                    #print('M{} got part from buffer at {}, b={}'.format(self.m, self.env.now, self.in_buff.level))
-                    
-                    self.idle_stop = self.env.now# - self.system.warmup_time
+                    self.idle_stop = self.env.now
                     
                 self.has_part = True
                 self.idle = False
@@ -120,13 +109,11 @@ class Machine:
                 self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
-                if self.idle_stop - self.idle_start > 0:
-                    #if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, idle_start, idle_stop))
+                if self.idle_stop - self.idle_start > 0:                  
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     
-                    if self.env.now > self.system.warmup_time:
-                        #if self.m==1: print('adding DT={} at t={}'.format(self.idle_stop-self.idle_start,self.env.now))
+                    if self.env.now > self.system.warmup_time:                        
                         self.total_downtime += self.idle_stop - self.idle_start
                 
                 # process part
@@ -135,21 +122,20 @@ class Machine:
                     self.remaining_process_time -= 1
                                      
                 # put finished part in output buffer
-                self.idle_start = self.env.now# - self.system.warmup_time#self.idle_stop = 0
+                self.idle_start = self.env.now
                 self.idle = True
                 if self.m < self.system.M-1:
-                    idle_start = self.env.now# - self.system.warmup_time
+                    idle_start = self.env.now
                         
                     yield self.out_buff.put(1)
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
-                    
-                    #print('M{} put part in buffer at {}, b={}'.format(self.m, self.env.now, self.out_buff.level))
-                    
-                    self.idle_stop = self.env.now# - self.system.warmup_time
+                                     
+                    self.idle_stop = self.env.now
                     self.idle = False
                 
                 if self.env.now > self.system.warmup_time:
                     self.parts_made += 1
+                    
                 self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
                 
                 self.has_part = False
@@ -158,8 +144,7 @@ class Machine:
                 if self.idle_stop - self.idle_start > 0:
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
-                    if self.env.now > self.system.warmup_time:
-                        #if self.m==1: print('adding DT={} at t={}'.format(self.idle_stop-self.idle_start,self.env.now))
+                    if self.env.now > self.system.warmup_time:                        
                         self.total_downtime += self.idle_stop - self.idle_start
                 
                 prev_part = self.env.now
@@ -174,9 +159,6 @@ class Machine:
                     
                 self.broken = True
                 self.has_part = False
-                                
-                # TODO: fix this
-                #time_to_repair = 10
                 
                 # check if part was finished before failure occured                
                 if self.remaining_process_time == 1: 
@@ -186,8 +168,6 @@ class Machine:
                     elif self.out_buff.level < self.out_buff.capacity:
                     # part was finished before failure
                         if self.m < self.system.M-1:
-                            #idle_start = self.env.now - self.system.warmup_time
-                            
                             yield self.out_buff.put(1)
                             self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
                         
@@ -248,12 +228,10 @@ class Machine:
                 
                 failure_stop = self.env.now
                 
-                if self.env.now > self.system.warmup_time:
-                    #print('adding DT={} at t={} at M{}'.format(failure_stop-failure_start,self.env.now, self.m))
+                if self.env.now > self.system.warmup_time:                    
                     self.total_downtime += failure_stop - failure_start
                 
-                # machine was idle before failure
-                #print('M{} idle due to failure from t={} to t={}'.format(self.m, failure_start, failure_stop))
+                # machine was idle before failure                
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
                                              self.name+' forced idle'] = 1
     
@@ -294,9 +272,8 @@ class Machine:
         Discrete state Markovian degradation process. 
         '''
         while True:
-            #print(self.env.now, self.health)
             while random() > self.degradation:
-                # do NOT degrade
+                # do not degrade
                 yield self.env.timeout(1)
                 
                 #check planned failures
@@ -318,8 +295,7 @@ class Machine:
             # degrade by one unit once loop breaks
             yield self.env.timeout(1)
             
-            if self.health < 10:
-                # machine is NOT failed
+            if self.health < 10: # machine is NOT failed
                 self.health += 1
                 
                 if self.health == 10: # machine fails
