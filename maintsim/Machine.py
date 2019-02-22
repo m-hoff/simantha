@@ -13,8 +13,7 @@ class Machine:
                  planned_failures,
                  failure_mode,
                  failure_params,
-                 system, 
-                 repairman):
+                 system):
                  
         self.env = env
         self.m = m
@@ -30,7 +29,6 @@ class Machine:
             self.ttf_dist = failure_params
             
         self.system = system
-        self.repairman = repairman
         
         # determine maintenance policy for machine
         self.maintenance_policy = self.system.maintenance_policy
@@ -63,10 +61,12 @@ class Machine:
         self.parts_made = 0
         self.total_downtime = 0 # blockage + startvation + repairs
         
-        self.process = self.env.process(self.working(self.system.repairman))
+        self.process = self.env.process(self.working())
         if self.failure_mode == 'degradation':
-            self.failing = self.env.process(self.degrade(self.system.repairman))
+            # start Markovian degradation process
+            self.failing = self.env.process(self.degrade())
         elif self.failure_mode == 'reliability':
+            # start random time to failure generation process
             self.failing = self.env.process(self.reliability())
         # self.env.process(self.maintain())
         
@@ -85,7 +85,7 @@ class Machine:
             except simpy.Interrupt:
                 pass
 
-    def working(self, repairman):
+    def working(self):
         '''
         Main production function. Machine will process parts
         until interrupted by failure. 
@@ -120,11 +120,11 @@ class Machine:
                 
                 # process part
                 for t in range(self.process_time):
-                    self.system.state_data.loc[self.env.now, self.name+' has part'] = self.remaining_process_time
+                    self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
                     yield self.env.timeout(1)
                     
                     self.remaining_process_time -= 1
-                                     
+                                            
                 # put finished part in output buffer
                 self.idle_start = self.env.now
                 self.idle = True
@@ -162,7 +162,8 @@ class Machine:
                 self.has_part = False
                 
                 # check if part was finished before failure occured                
-                if self.remaining_process_time == 1: 
+                if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):
+                    # I think this works. Might need further valifation
                     if self.m == self.system.M-1:
                         if self.env.now > self.system.warmup_time:
                             self.parts_made += 1
@@ -241,7 +242,7 @@ class Machine:
         while True:
             # check for planned failures
             for failure in self.planned_failures:
-                #TODO: make this a method
+                #TODO: make this a method?
                 if failure[1] == self.env.now:
                     self.time_to_repair = failure[2]
                     self.repair_type = 'planned'
@@ -266,7 +267,7 @@ class Machine:
             else:
                 yield self.env.timeout(1) #TODO: check the placement of this
             
-    def degrade(self, repairman):
+    def degrade(self):
         '''
         Discrete state Markovian degradation process. 
         '''
@@ -310,19 +311,13 @@ class Machine:
                     
                     # record CBM "failure"
                     print('CBM failure on {} at {}'.format(self.m, self.env.now))
-                    #print('health={}'.format(self.health))
-                    #self.system.maintenance_data.loc[self.env.now, 'machine'] = self.m
-                    #self.system.maintenance_data.loc[self.env.now, 'type'] = 'CBM'
-                    #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'failure'
                     
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
                     self.process.interrupt()
                     
-                    #self.process.interrupt()
-                #print(self.repairman.count)
                 if (self.maintenance_policy == 'CBM') and (self.health >= self.CBM_threshold) and (not self.failed):
-                    if self.repairman.count == 0:
+                    if self.system.repairman.count == 0:
                         # only interrupt processing if repairman available
                         #print('M{} calling repairman at {}'.format(self.m, self.env.now))
                         self.process.interrupt()
@@ -341,7 +336,7 @@ class Machine:
             if self.health == 10:
                 self.failed = True
                 self.repair_type = 'CM'
-                self.time_to_repair = 10
+                self.time_to_repair = 10 #TODO
                 print('Calling corrective failure on M{} at t={}'.format(self.m, self.env.now))
                 self.process.interrupt()
             elif self.maintenance_policy == 'CBM':

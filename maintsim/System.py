@@ -3,7 +3,7 @@ import time
 import pandas as pd
 from graphviz import Digraph
 
-from Machine import Machine
+from .Machine import Machine
 
 class System:
     '''
@@ -122,7 +122,7 @@ class System:
             #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
             #                          planned_failures_m, self, self.repairman)]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
-                              self.failure_mode, self.failure_params[m], self, self.repairman)]
+                              self.failure_mode, self.failure_params[m], self)]
                                       
         # initialize system data collection
         state_cols = ['time']     # system state data
@@ -131,7 +131,7 @@ class System:
         
         
         for machine in self.machines:
-            state_cols += [machine.name + ' has part']
+            state_cols += [machine.name + ' R(t)']
             if machine.m < (self.M - 1):
                 state_cols += ['b{} level'.format(machine.m)]
                 
@@ -186,6 +186,13 @@ class System:
         #self.state_data.fillna(0, inplace=True)
         #TODO: clean up this data
         #TODO: check df datatypes 
+        for m in range(self.M):
+            # clean buffer level data
+            if m < self.M-1:
+                self.state_data['b{} level'.format(m)].fillna(0, inplace=True)
+            
+            # clean remaining processing time data
+            self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
         
         #     production data
         self.data['production'].fillna(method='ffill', inplace=True)
