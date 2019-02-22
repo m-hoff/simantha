@@ -3,6 +3,9 @@ import pandas as pd
 from random import random
 
 class Machine:
+    '''
+    Machine object. Processes parts while not failed or under repair.
+    '''
     def __init__(self, 
                  env, 
                  m, 
@@ -51,7 +54,6 @@ class Machine:
         # maintenance state
         self.health = 0 # starts in perfect health
         self.last_repair = None
-        self.in_maintenance_queue = False
         self.failed = False
         self.repair_type = None
         # production state
@@ -85,13 +87,13 @@ class Machine:
 
     def working(self, repairman):
         '''
-        Main production function. Machine will produce parts
+        Main production function. Machine will process parts
         until interrupted by failure. 
         '''
         prev_part = 0
         while True:
             try:
-                self.idle_start = self.idle_stop = 0
+                self.idle_start = self.idle_stop = self.env.now
                 self.idle = True
                 
                 # get part from input buffer
@@ -104,7 +106,7 @@ class Machine:
                 self.has_part = True
                 self.idle = False
                 
-                self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
+                #self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
                  
                 self.remaining_process_time = self.process_time
                     
@@ -113,20 +115,20 @@ class Machine:
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     
-                    if self.env.now > self.system.warmup_time:                        
-                        self.total_downtime += self.idle_stop - self.idle_start
+                    if self.env.now > self.system.warmup_time:       
+                        self.total_downtime += (self.idle_stop - self.idle_start)
                 
                 # process part
                 for t in range(self.process_time):
+                    self.system.state_data.loc[self.env.now, self.name+' has part'] = self.remaining_process_time
                     yield self.env.timeout(1)
+                    
                     self.remaining_process_time -= 1
                                      
                 # put finished part in output buffer
                 self.idle_start = self.env.now
                 self.idle = True
                 if self.m < self.system.M-1:
-                    idle_start = self.env.now
-                        
                     yield self.out_buff.put(1)
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
                                      
@@ -144,8 +146,8 @@ class Machine:
                 if self.idle_stop - self.idle_start > 0:
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
-                    if self.env.now > self.system.warmup_time:                        
-                        self.total_downtime += self.idle_stop - self.idle_start
+                    if self.env.now > self.system.warmup_time:
+                        self.total_downtime += (self.idle_stop - self.idle_start)
                 
                 prev_part = self.env.now
                                 
@@ -157,7 +159,6 @@ class Machine:
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
                     
-                self.broken = True
                 self.has_part = False
                 
                 # check if part was finished before failure occured                
@@ -211,8 +212,6 @@ class Machine:
                 self.health = 0
                 self.last_repair = self.env.now
                 self.failed = False
-                self.broken = False
-                self.in_maintenance_queue = False
                 
                 maintenance_stop = self.env.now
                 
@@ -228,8 +227,8 @@ class Machine:
                 
                 failure_stop = self.env.now
                 
-                if self.env.now > self.system.warmup_time:                    
-                    self.total_downtime += failure_stop - failure_start
+                if self.env.now > self.system.warmup_time:       
+                    self.total_downtime += (failure_stop - failure_start)
                 
                 # machine was idle before failure                
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
@@ -302,7 +301,6 @@ class Machine:
                     self.failed = True
                     self.repair_type = 'CM'
                     
-                    self.in_maintenance_queue = True
                     self.process.interrupt()
                     
                 elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
@@ -317,7 +315,6 @@ class Machine:
                     #self.system.maintenance_data.loc[self.env.now, 'type'] = 'CBM'
                     #self.system.maintenance_data.loc[self.env.now, 'activity'] = 'failure'
                     
-                    self.in_maintenance_queue = True
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
                     self.process.interrupt()

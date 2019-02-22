@@ -182,8 +182,9 @@ class System:
         
         # clean data frames
         #     state data
-        self.state_data.fillna(method='ffill', inplace=True)
-        self.state_data.fillna(0, inplace=True)
+        #self.state_data.fillna(method='ffill', inplace=True)
+        #self.state_data.fillna(0, inplace=True)
+        #TODO: clean up this data
         #TODO: check df datatypes 
         
         #     production data
@@ -191,7 +192,7 @@ class System:
         self.data['production'].fillna(0, inplace=True)
         for m in range(self.M):
             TH_col = 'M{} throughput'.format(m)
-            self.data['production'][TH_col] = self.data['production']['M{} production'.format(m)]/self.data['production']['time']
+            self.production_data[TH_col] = self.production_data['M{} production'.format(m)]/self.production_data['time']
         
         #     machine data
         for m in range(self.M):
@@ -213,6 +214,9 @@ class System:
             #TODO: print system summary
             
     def draw(self):
+        '''
+        Draw the system diagram. Only tested for jupyter notebooks.
+        '''
         sys = Digraph(comment='System layout')
 
         # create machine node shape
@@ -224,7 +228,6 @@ class System:
         # create node for each machine
         for m in range(self.M):
             Mi = 'M{}'.format(m)
-
             sys.node(Mi, Mi)
 
         # create node for each buffer
