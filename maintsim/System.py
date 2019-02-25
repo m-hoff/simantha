@@ -49,7 +49,7 @@ class System:
         self.failure_params = failure_params
         if self.failure_mode:
             if self.failure_mode == 'degradation': # Markov degradation
-                if type(failure_params) == int:
+                if type(failure_params) == float:
                     self.degradation = [failure_params]*self.M
                 else:
                     self.degradation = failure_params
@@ -184,7 +184,6 @@ class System:
         #     state data
         #self.state_data.fillna(method='ffill', inplace=True)
         #self.state_data.fillna(0, inplace=True)
-        #TODO: clean up this data
         #TODO: check df datatypes 
         for m in range(self.M):
             # clean buffer level data
@@ -210,7 +209,7 @@ class System:
             self.machine_data[col2] = self.machine_data[col2].fillna(0)
         
         #     queue data
-        #TODO: record queue data
+        self.queue_data.fillna(0, inplace=True)
         
         #     maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)

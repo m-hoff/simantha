@@ -205,7 +205,10 @@ class Machine:
                     self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
                 
                 # wait for repair to finish
-                yield self.env.timeout(self.time_to_repair)
+                for t in range(self.time_to_repair):
+                    yield self.env.timeout(1)
+                    # record queue data
+                    self.system.queue_data.loc[self.env.now, 'contents'] = len(self.system.repairman.queue)
 
                 # repairman is released
                 self.system.repairman.release(self.maintenance_request)
