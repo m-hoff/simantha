@@ -1,30 +1,30 @@
-## maintsim
-### Simulation of the operation and maintenance of manufacturing systems
+# maintsim
+## Simulation of the operation and maintenance of manufacturing systems
 
 `maintsim` can be used to model a discrete manufacturing system where components degrade over time and recieve maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
 
 ---
 
-### Using this package
+## Using this package
 
-##### Setting up a manufacturing system
+#### Setting up a manufacturing system
 
 The workflow begins by creating a `System` object that is defined by the following parameters:
 
-**Configuration parameters**
+###### Configuration parameters
 - `process_times` - a list of process times for each machine in a serial line.
 - `interarrival_time` - the time between part arrivals to the first machine in the system. The default is 1, which ensures the first machine is never starved.
 - `buffer_sizes` - a list of buffer sizes for each machine, or an integer value for the buffer size of all machines. Default is 1. For M machines there are M-1 buffers.
 - `initial_buffer` - a list of initial buffer levels for each buffer. By default buffers will begin empty.
 
-**Failure parameters**
+##### Failure parameters
 - `failure_mode` - currently either `'degradation'`, `'reliability'`, or `None`. Each machine is subject to the same mode of degradation. By default machines do not degrade.
   - `'degradation'` - machine degradation occurs according to a discrete-state Markovian process.
   - `'reliability'` - machines fail according to a prescribed distribution of time to failure.
 - `failure_params` - for `'degradation'`, a list of transition probabilities between degradation states. For `'reliability'`, a list of `scipy.stats` frozen distribution from which random times to failure will be sampled.
 - `planned_failures` - a list of planned failures to occur during the simulation time. Each of the form `(location, time, duration)`.
 
-**Maintenance parameters**
+##### Maintenance parameters
 - `maintenance_policy` - currently either `'CM'` or `CBM`.
   - `'CM'` - "corrective maintenance", the default policy, machines will only be repaired upon complete failure, as determined by the mode of degradation.
   - `'CBM'` - "condition-based maintenance", preventive maintenance is performed once a machine's condition reached a prescribed threshold.
@@ -34,7 +34,7 @@ The workflow begins by creating a `System` object that is defined by the followi
 - `maintenance_costs` - a dictionary of the cost of each type of maintenance job.
 
 
-##### Simulating the system
+#### Simulating the system
 
 When the system is instantiated, it will initialize by creating the necessary objects including the SimPy `Environment`, the maintenance resource, machines, and buffers. The simulation can be run by calling the `simulate` method of the `System` object with the following parameters:
 
@@ -56,16 +56,17 @@ Several data frames are created to record data of a simulation run and stored as
 - `maintenance_data` - the log of maintenance activities including the time at which the activity occurred, the type of activity (corrective, preventive, etc.), what the activity was (failure or repair), and the duration or time to failure.
 
 
-##### Other features
+#### Other features
 
 - The method `System.draw()` will display the system layout (only tested in jupyter notebooks).
 
 ---
 
-##### Planned features
+#### Planned features
 
 Key planned features include
 
+- Replication of the simulation to sample objective function values
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
 - Non-homogeneous degradation modes
-- Exporting
+- Exporting system model for reuse

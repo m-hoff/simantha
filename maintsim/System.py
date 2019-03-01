@@ -1,5 +1,7 @@
 import simpy
+
 import time
+import random
 import pandas as pd
 from graphviz import Digraph
 
@@ -14,37 +16,37 @@ class System:
                  interarrival_time=1, # int
                  buffer_sizes=1, # list or int
                  initial_buffer=0,
-                 
+
                  failure_mode=None,
                  failure_params=None,
                  planned_failures=None, # list of (loc, time, duration)
-                 
+
                  maintenance_policy=None, # CM/PM/CBM, str
                  maintenance_params=None, # define policy
-                 repair_params=None,
+                 repair_params=None, # define TTR
                  maintenance_capacity=None,
                  maintenance_costs=None, # dict of cost by job type
-                 
+
                  debug=False):
-        
+
         # inferred system characteristics
         self.M = len(process_times) # number of machines
         self.bottleneck_process_time = max(process_times)
         self.bottleneck = process_times.index(self.bottleneck_process_time)
-                
+
         # specified system characteristics
         self.process_times = process_times
-        self.interarrival_time = interarrival_time        
+        self.interarrival_time = interarrival_time
         if type(buffer_sizes) == int:
             self.buffer_sizes = [buffer_sizes]*(self.M-1)
         else:
             self.buffer_sizes = buffer_sizes
-           
+
         if type(initial_buffer) == int:
             self.initial_buffer = [initial_buffer]*(self.M-1)
         else:
             self.initial_buffer = initial_buffer
-        
+
         self.failure_mode = failure_mode
         self.failure_params = failure_params
         if self.failure_mode:
@@ -61,15 +63,15 @@ class System:
         else: # no degradation
             self.failure_mode = 'degradation'
             self.failure_params = [0]*self.M
-            
+
         self.repair_params = repair_params
-            
-        #self.failures = failures    
+
+        #self.failures = failures
         #if degradation:
         #    self.degradation = degradation
         #else:
         #    self.degradation = [0]*len(process_times)
-        
+
         self.planned_failures = planned_failures
         self.maintenance_policy = maintenance_policy
         self.maintenance_params = maintenance_params
@@ -81,64 +83,66 @@ class System:
         self.maintenance_costs = maintenance_costs
 
         self.debug = debug
-        
+
         self.initialize() # initialize system objects
-        
+
         # simulation parameters
         self.warmup_time = 0
-        
+
     def initialize(self):
         '''
-        Prepares the system for simulation. The system must be 
-        reinitialized with a new simpy environment for each 
-        iteration of the simulation. 
+        Prepares the system for simulation. The system must be
+        reinitialized with a new simpy environment for each
+        iteration of the simulation.
         '''
-    
+
         # create simpy environment
         self.env = simpy.Environment()
-    
+
         # create repairman object
         self.repairman = simpy.PriorityResource(self.env, capacity=self.maintenance_capacity)
-    
+
         # create source object
-    
+
         # create objects for each machine
         self.buffers = []
         self.machines = []
-        
+
         for m in range(self.M):
             # buffer objects
             if m < (self.M - 1):
                 self.buffers += [simpy.Container(self.env, capacity=self.buffer_sizes[m], init=self.initial_buffer[m])]
-            
+
             # planned failures for m
             if self.planned_failures:
                 planned_failures_m = [DT for DT in self.planned_failures if DT[0] == m]
             else:
                 planned_failures_m = []
-            
+
             # machine objects
             process_time = self.process_times[m]
             #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
             #                          planned_failures_m, self, self.repairman)]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
                               self.failure_mode, self.failure_params[m], self)]
-                                      
+
         # initialize system data collection
         state_cols = ['time']     # system state data
         prod_cols = ['time']      # production data
         machine_cols = ['time']   # machine status data
-        
-        
+
+
         for machine in self.machines:
             state_cols += [machine.name + ' R(t)']
             if machine.m < (self.M - 1):
                 state_cols += ['b{} level'.format(machine.m)]
-                
+
             prod_cols += [machine.name+' production', machine.name+' throughput']
-                
-            machine_cols += [machine.name+' functional', machine.name+' forced idle']
-                    
+
+            machine_cols += [machine.name+' functional', 
+                             machine.name+' forced idle',
+                             machine.name+' health']
+
         self.state_data = pd.DataFrame(columns=state_cols) #TODO: write state data
         self.production_data = pd.DataFrame(columns=prod_cols) #TODO: write production data
         self.machine_data = pd.DataFrame(columns=machine_cols) #TODO: write machine data
@@ -153,72 +157,75 @@ class System:
                      'machine': self.machine_data,
                      'queue':self.queue_data,
                      'maintenance': self.maintenance_data}
-                     
-        self.next_for_repair = None             
-        
+
+        self.next_for_repair = None
+
     def simulate(self, title='Simulation',
                  warmup_time=0,
                  sim_time=100,
                  seed=None,
                  verbose=True):
-                 
+
         self.warmup_time = warmup_time
         self.sim_time = sim_time
-        
+
         if self.planned_failures:
             self.planned_failures = [(dt[0], dt[1]+self.warmup_time, dt[2]) for dt in self.planned_failures]
-        
+
         start_time = time.time()
         if seed:
             random.seed(seed)
-                          
+
         self.initialize() # reinitialize system
 
         for key in self.data.keys():
             self.data[key]['time'] = list(range(-self.warmup_time, self.sim_time))
-       
+
         # run simulation
-        self.env.run(until=warmup_time+sim_time+1)   
-        
+        self.env.run(until=warmup_time+sim_time+1)
+
         # clean data frames
         #     state data
         #self.state_data.fillna(method='ffill', inplace=True)
         #self.state_data.fillna(0, inplace=True)
-        #TODO: check df datatypes 
+        #TODO: check df datatypes
         for m in range(self.M):
             # clean buffer level data
             if m < self.M-1:
                 self.state_data['b{} level'.format(m)].fillna(0, inplace=True)
-            
+
             # clean remaining processing time data
             self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
-        
+
         #     production data
         self.data['production'].fillna(method='ffill', inplace=True)
         self.data['production'].fillna(0, inplace=True)
         for m in range(self.M):
             TH_col = 'M{} throughput'.format(m)
             self.production_data[TH_col] = self.production_data['M{} production'.format(m)]/self.production_data['time']
-        
+
         #     machine data
         for m in range(self.M):
+            self.machine_data['M{} health'.format(m)].ffill(inplace=True)
+            self.machine_data['M{} health'.format(m)].fillna(0, inplace=True)
+
             col1 = 'M{} functional'.format(m)
             self.machine_data[col1] = self.machine_data[col1].fillna(1)
-            
+
             col2 = 'M{} forced idle'.format(m)
             self.machine_data[col2] = self.machine_data[col2].fillna(0)
-        
+
         #     queue data
         self.queue_data.fillna(0, inplace=True)
-        
+
         #     maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)
         self.maintenance_data.reset_index(inplace=True, drop=True)
-        
+
         if verbose:
-            print('Simulation complete in {:.2f}s'.format(time.time()-start_time))        
+            print('Simulation complete in {:.2f}s'.format(time.time()-start_time))
             #TODO: print system summary
-            
+
     def draw(self):
         '''
         Draw the system diagram. Only tested for jupyter notebooks.

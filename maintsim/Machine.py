@@ -76,10 +76,10 @@ class Machine:
     def debug_process(self):
         while True:
             try:
-                if self.m == 0:
-                    print('t={} health: {} '.format(self.env.now, self.health), end='')
-                else:
-                    print(self.health)
+                if self.m == 1:
+                    print('t={} health: {} '.format(self.env.now, self.health))
+                #else:
+                #    print(self.health)
                 yield self.env.timeout(1)
                 
             except simpy.Interrupt:
@@ -90,7 +90,6 @@ class Machine:
         Main production function. Machine will process parts
         until interrupted by failure. 
         '''
-        prev_part = 0
         while True:
             try:
                 self.idle_start = self.idle_stop = self.env.now
@@ -119,7 +118,7 @@ class Machine:
                         self.total_downtime += (self.idle_stop - self.idle_start)
                 
                 # process part
-                for t in range(self.process_time):
+                for _ in range(self.process_time):
                     self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
                     yield self.env.timeout(1)
                     
@@ -148,13 +147,12 @@ class Machine:
                                                  self.name+' forced idle'] = 1
                     if self.env.now > self.system.warmup_time:
                         self.total_downtime += (self.idle_stop - self.idle_start)
-                
-                prev_part = self.env.now
                                 
             except simpy.Interrupt: 
                 # processing interrupted due to failure
                 failure_start = self.env.now
                 if self.failed:
+                    fail_time = self.env.now - self.system.warmup_time
                     # create maintenance request (after stopping production)
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
@@ -187,7 +185,11 @@ class Machine:
                     TTF = self.env.now - self.last_repair
                 else:
                     TTF = 'NA'
-                new_failure = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
+                
+                if not self.failed:
+                    fail_time = self.env.now - self.system.warmup_time
+
+                new_failure = pd.DataFrame({'time':[fail_time],
                                             'machine':[self.m],
                                             'type':[self.repair_type],
                                             'activity':['failure'],
@@ -205,7 +207,7 @@ class Machine:
                     self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
                 
                 # wait for repair to finish
-                for t in range(self.time_to_repair):
+                for _ in range(self.time_to_repair):
                     yield self.env.timeout(1)
                     # record queue data
                     self.system.queue_data.loc[self.env.now, 'contents'] = len(self.system.repairman.queue)
@@ -216,6 +218,9 @@ class Machine:
                 self.health = 0
                 self.last_repair = self.env.now
                 self.failed = False
+
+                # record restored health
+                self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                 
                 maintenance_stop = self.env.now
                 
@@ -268,7 +273,7 @@ class Machine:
                 
                 self.process.interrupt()
             else:
-                yield self.env.timeout(1) #TODO: check the placement of this
+                yield self.env.timeout(1)
             
     def degrade(self):
         '''
@@ -300,6 +305,9 @@ class Machine:
             
             if self.health < 10: # machine is NOT failed
                 self.health += 1
+
+                # record current machine health
+                self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                 
                 if self.health == 10: # machine fails
                     self.failed = True
@@ -313,7 +321,7 @@ class Machine:
                     self.repair_type = 'CBM'
                     
                     # record CBM "failure"
-                    print('CBM failure on {} at {}'.format(self.m, self.env.now))
+                    print('CBM triggered on {} at {}'.format(self.m, self.env.now))
                     
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
