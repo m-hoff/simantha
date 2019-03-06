@@ -143,15 +143,15 @@ class System:
                              machine.name+' forced idle',
                              machine.name+' health']
 
-        self.state_data = pd.DataFrame(columns=state_cols) #TODO: write state data
-        self.production_data = pd.DataFrame(columns=prod_cols) #TODO: write production data
-        self.machine_data = pd.DataFrame(columns=machine_cols) #TODO: write machine data
-        self.queue_data = pd.DataFrame(columns=['time', 'contents']) #TODO: write queue data
+        self.state_data = pd.DataFrame(columns=state_cols)
+        self.production_data = pd.DataFrame(columns=prod_cols)
+        self.machine_data = pd.DataFrame(columns=machine_cols)
+        self.queue_data = pd.DataFrame(columns=['time', 'contents'])
         self.maintenance_data = pd.DataFrame(columns=['time',
                                                       'machine',
                                                       'type',
                                                       'activity',
-                                                      'duration']) #TODO: write maint data
+                                                      'duration'])
         self.data = {'state': self.state_data,
                      'production': self.production_data,
                      'machine': self.machine_data,
@@ -185,10 +185,7 @@ class System:
         self.env.run(until=warmup_time+sim_time+1)
 
         # clean data frames
-        #     state data
-        #self.state_data.fillna(method='ffill', inplace=True)
-        #self.state_data.fillna(0, inplace=True)
-        #TODO: check df datatypes
+        #   state data
         for m in range(self.M):
             # clean buffer level data
             if m < self.M-1:
@@ -197,14 +194,14 @@ class System:
             # clean remaining processing time data
             self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
 
-        #     production data
+        #  production data
         self.data['production'].fillna(method='ffill', inplace=True)
         self.data['production'].fillna(0, inplace=True)
         for m in range(self.M):
             TH_col = 'M{} throughput'.format(m)
             self.production_data[TH_col] = self.production_data['M{} production'.format(m)]/self.production_data['time']
 
-        #     machine data
+        #  machine data
         for m in range(self.M):
             self.machine_data['M{} health'.format(m)].ffill(inplace=True)
             self.machine_data['M{} health'.format(m)].fillna(0, inplace=True)
@@ -215,16 +212,37 @@ class System:
             col2 = 'M{} forced idle'.format(m)
             self.machine_data[col2] = self.machine_data[col2].fillna(0)
 
-        #     queue data
+            self.machine_data['M{} health'.format(m)].astype(int)
+
+        #  queue data
         self.queue_data.fillna(0, inplace=True)
 
-        #     maintenance data
+        #  maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)
         self.maintenance_data.reset_index(inplace=True, drop=True)
 
         if verbose:
-            print('Simulation complete in {:.2f}s'.format(time.time()-start_time))
-            #TODO: print system summary
+            print('Simulation complete in {:.2f}s\n'.format(time.time()-start_time))
+            print('  Units produced:      {}'.format(self.machines[-1].parts_made))
+            
+            functional = ['M{} functional'.format(m) for m in range(self.M)]
+            functional = self.machine_data[self.machine_data['time'] >= 0][functional]
+            avail = functional.sum().sum() / (self.M * self.sim_time)
+
+            print('  System availability: {:.2f}%\n'.format(avail*100))
+
+    def iterate_simulation(self, replications, warmup_time, sim_time, 
+                           objective, verbose=True):
+        start_time = time.time()                           
+        obj = []
+        for _ in range(replications):
+            self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
+        
+            if objective == 'production':
+                obj += [self.machines[-1].parts_made]
+            #TODO: objectives - PMOW, availability, cost
+        print('{} replications finished in {:.2f}s'.format(replications, time.time()-start_time))                
+        return obj
 
     def draw(self):
         '''
