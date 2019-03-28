@@ -20,6 +20,7 @@ class System:
                  failure_mode=None,
                  failure_params=None,
                  planned_failures=None, # list of (loc, time, duration)
+                 initial_health=None, # initial health states of machines
 
                  maintenance_policy=None, # CM/PM/CBM, str
                  maintenance_params=None, # define policy
@@ -63,6 +64,11 @@ class System:
         else: # no degradation
             self.failure_mode = 'degradation'
             self.failure_params = [0]*self.M
+
+        if initial_health:
+            self.initial_health = initial_health
+        else:
+            self.initial_health = [0]*self.M
 
         self.repair_params = repair_params
 
@@ -124,7 +130,8 @@ class System:
             #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
             #                          planned_failures_m, self, self.repairman)]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
-                              self.failure_mode, self.failure_params[m], self)]
+                              self.failure_mode, self.failure_params[m], 
+                              self.initial_health[m], self)]
 
         # initialize system data collection
         state_cols = ['time']     # system state data
@@ -189,9 +196,14 @@ class System:
         for m in range(self.M):
             # clean buffer level data
             if m < self.M-1:
+<<<<<<< HEAD
                 self.state_data['b{} level'.format(m)].ffill(inplace=True)
                 self.state_data['b{} level'.format(m)].fillna(0, inplace=True)                
 
+=======
+                #self.state_data['b{} level'.format(m)].fillna(0, inplace=True)
+                self.state_data['b{} level'.format(m)].ffill(inplace=True)
+>>>>>>> c1c0e73cd06973963646206b1545165e23434367
             # clean remaining processing time data
             self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
 
@@ -205,7 +217,7 @@ class System:
         #  machine data
         for m in range(self.M):
             self.machine_data['M{} health'.format(m)].ffill(inplace=True)
-            self.machine_data['M{} health'.format(m)].fillna(0, inplace=True)
+            self.machine_data['M{} health'.format(m)].fillna(self.initial_health[m], inplace=True)
 
             col1 = 'M{} functional'.format(m)
             self.machine_data[col1] = self.machine_data[col1].fillna(1)

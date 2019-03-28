@@ -13,6 +13,7 @@ class Machine:
                  planned_failures,
                  failure_mode,
                  failure_params,
+                 initial_health,
                  system):
                  
         self.env = env
@@ -50,7 +51,7 @@ class Machine:
         
         # set initial machine state
         # maintenance state
-        self.health = 0 # starts in perfect health
+        self.health = initial_health
         self.last_repair = None
         self.failed = False
         self.repair_type = None
