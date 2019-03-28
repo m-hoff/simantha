@@ -196,14 +196,9 @@ class System:
         for m in range(self.M):
             # clean buffer level data
             if m < self.M-1:
-<<<<<<< HEAD
                 self.state_data['b{} level'.format(m)].ffill(inplace=True)
                 self.state_data['b{} level'.format(m)].fillna(0, inplace=True)                
 
-=======
-                #self.state_data['b{} level'.format(m)].fillna(0, inplace=True)
-                self.state_data['b{} level'.format(m)].ffill(inplace=True)
->>>>>>> c1c0e73cd06973963646206b1545165e23434367
             # clean remaining processing time data
             self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
 
