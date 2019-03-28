@@ -189,14 +189,15 @@ class System:
         for m in range(self.M):
             # clean buffer level data
             if m < self.M-1:
-                self.state_data['b{} level'.format(m)].fillna(0, inplace=True)
+                self.state_data['b{} level'.format(m)].ffill(inplace=True)
+                self.state_data['b{} level'.format(m)].fillna(0, inplace=True)                
 
             # clean remaining processing time data
             self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
 
         #  production data
-        self.data['production'].fillna(method='ffill', inplace=True)
-        self.data['production'].fillna(0, inplace=True)
+        self.production_data.fillna(method='ffill', inplace=True)
+        self.production_data.fillna(0, inplace=True)
         for m in range(self.M):
             TH_col = 'M{} throughput'.format(m)
             self.production_data[TH_col] = self.production_data['M{} production'.format(m)]/self.production_data['time']
