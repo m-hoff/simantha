@@ -77,8 +77,8 @@ class Machine:
     def debug_process(self):
         while True:
             try:
-                if self.m == 1:
-                    print('t={} health: {} '.format(self.env.now, self.health))
+                if (self.m == 1):
+                    print('t={}, b0={}'.format(self.env.now, self.in_buff.level))
                 #else:
                 #    print(self.health)
                 yield self.env.timeout(1)
@@ -98,7 +98,7 @@ class Machine:
                 
                 # get part from input buffer
                 if self.m > 0:
-                    yield self.in_buff.get(1)
+                    yield self.in_buff.get(1)                    
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m-1)] = self.in_buff.level
                     
                     self.idle_stop = self.env.now
@@ -129,9 +129,9 @@ class Machine:
                 self.idle_start = self.env.now
                 self.idle = True
                 if self.m < self.system.M-1:
-                    yield self.out_buff.put(1)
-                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
-                                     
+                    yield self.out_buff.put(1) 
+                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level                    
+
                     self.idle_stop = self.env.now
                     self.idle = False
                 
@@ -161,13 +161,13 @@ class Machine:
                 self.has_part = False
                 
                 # check if part was finished before failure occured                
-                if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):
+                if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
                     # I think this works. Might need further valifation
                     if self.m == self.system.M-1:
                         if self.env.now > self.system.warmup_time:
                             self.parts_made += 1
                     elif self.out_buff.level < self.out_buff.capacity:
-                    # part was finished before failure
+                    # part was finished before failure                        
                         if self.m < self.system.M-1:
                             yield self.out_buff.put(1)
                             self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
