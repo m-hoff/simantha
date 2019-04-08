@@ -4,7 +4,7 @@ from random import random
 
 class Machine:
     '''
-    Machine object. Processes parts while not failed or under repair.
+    Machine object. Processes discrete parts while not failed or under repair.
     '''
     def __init__(self, 
                  env, 
@@ -55,6 +55,7 @@ class Machine:
         self.last_repair = None
         self.failed = False
         self.repair_type = None
+        self.need_repair = False
         # production state
         self.idle = True
         self.has_part = False
@@ -71,6 +72,8 @@ class Machine:
             self.failing = self.env.process(self.reliability())
         # self.env.process(self.maintain())
         
+        self.env.process(self.maintain())
+
         if self.system.debug:
             self.env.process(self.debug_process())
                 
@@ -78,7 +81,8 @@ class Machine:
         while True:
             try:
                 if (self.m == 1):
-                    print('t={}, b0={}'.format(self.env.now, self.in_buff.level))
+                    #print('t={}, r={}'.format(self.env.now, self.system.repairman.count))
+                    print(self.system.repairman.get_queue, self.system.repairman.put_queue)
                 #else:
                 #    print(self.health)
                 yield self.env.timeout(1)
@@ -150,6 +154,10 @@ class Machine:
                         self.total_downtime += (self.idle_stop - self.idle_start)
                                 
             except simpy.Interrupt: 
+                # if self.repair_type == 'planned':
+                #     self.env.timeout(self.time_to_repair)
+                #     return
+
                 # processing interrupted due to failure
                 failure_start = self.env.now
                 if self.failed:
@@ -159,7 +167,6 @@ class Machine:
                     yield self.maintenance_request
                     
                 self.has_part = False
-                
                 # check if part was finished before failure occured                
                 if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
                     # I think this works. Might need further valifation
@@ -178,7 +185,6 @@ class Machine:
                     self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
                         
                     self.has_part = False
-                    
                 maintenance_start = self.env.now
                
                 # write failure data
@@ -196,7 +202,7 @@ class Machine:
                                             'activity':['failure'],
                                             'duration':[TTF]})
                 self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
-             
+
                 #TODO: get priority
                 #with self.system.repairman.request(priority=1) as req:
                 #    print('Request made by M{} at t={}'.format(self.m, self.env.now))
@@ -206,7 +212,6 @@ class Machine:
                 # generate TTR based on repair type
                 if self.repair_type is not 'planned':
                     self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
-                
                 # wait for repair to finish
                 for _ in range(self.time_to_repair):
                     yield self.env.timeout(1)
@@ -286,26 +291,26 @@ class Machine:
                 yield self.env.timeout(1)
                 
                 #check planned failures
-                for failure in self.planned_failures:
-                    if failure[1] == self.env.now:
-                        self.time_to_repair = failure[2]
-                        self.repair_type = 'planned'
-                        '''
-                        Here we create a maintenance request without interrupting
-                        the machine's processing. The process is only interrupted
-                        once it seizes a maintenance resource and the job begins.
-                        '''                   
-                        #THIS METHOD WORKS
-                        self.maintenance_request = self.system.repairman.request(priority=1)
+                # for failure in self.planned_failures:
+                #     if failure[1] == self.env.now:
+                #         self.time_to_repair = failure[2]
+                #         self.repair_type = 'planned'
+                #         '''
+                #         Here we create a maintenance request without interrupting
+                #         the machine's processing. The process is only interrupted
+                #         once it seizes a maintenance resource and the job begins.
+                #         '''                   
+                #         #THIS METHOD WORKS
+                #         self.maintenance_request = self.system.repairman.request(priority=1)
                         
-                        yield self.maintenance_request # wait for repairman to become available
-                        self.process.interrupt()
+                #         yield self.maintenance_request # wait for repairman to become available
+                #         self.process.interrupt()
             
             # degrade by one unit once loop breaks
             yield self.env.timeout(1)
             
             if self.health < 10: # machine is NOT failed
-                self.health += 1
+                self.health += 1 # degrade by one unit
 
                 # record current machine health
                 self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
@@ -313,49 +318,83 @@ class Machine:
                 if self.health == 10: # machine fails
                     self.failed = True
                     self.repair_type = 'CM'
+                    #self.need_repair = True
                     
                     self.process.interrupt()
                     
-                elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
-                    # hit CBM threshold, schedule maintenance
-                    # TODO schedule preventive CBM maintenance
-                    self.repair_type = 'CBM'
+                # elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
+                #     # hit CBM threshold, schedule maintenance
+                #     # TODO schedule preventive CBM maintenance
+                #     self.repair_type = 'CBM'
                     
-                    # record CBM "failure"
-                    print('CBM triggered on {} at {}'.format(self.m, self.env.now))
+                #     # record CBM "failure"
+                #     print('CBM triggered on {} at {}'.format(self.m, self.env.now))
                     
-                    self.maintenance_request = self.system.repairman.request(priority=1)
-                    yield self.maintenance_request
-                    self.process.interrupt()
+                #     self.maintenance_request = self.system.repairman.request(priority=1)
+                #     yield self.maintenance_request
+                #     self.process.interrupt()
                     
                 if (self.maintenance_policy == 'CBM') and (self.health >= self.CBM_threshold) and (not self.failed):
-                    if self.system.repairman.count == 0:
-                        # only interrupt processing if repairman available
-                        #print('M{} calling repairman at {}'.format(self.m, self.env.now))
-                        self.process.interrupt()
-                        
+                    # CBM threshold reached, request repair
+                    self.need_repair = True
+                    self.repair_type = 'CBM'
+                    # if self.system.repairman.count == 0:
+                    #     # only interrupt processing if repairman available
+                    #     print('M{} calling repairman at {}'.format(self.m, self.env.now))
+                    #     self.repair_type = 'CBM'
+                    #     self.maintenance_request = self.system.repairman.request(priority=1)
+                    #     yield self.maintenance_request
+                    #     self.process.interrupt()
+    
     def maintain(self):
         while True:
-            # check for planned failures
+            # check if a failure is planned
             for failure in self.planned_failures:
                 if failure[1] == self.env.now:
                     self.time_to_repair = failure[2]
                     self.repair_type = 'planned'
-                    self.failed = True
-                    print('Calling planned failure on M{}'.format(self.m))
-                    self.process.interrupt()
-            
-            if self.health == 10:
-                self.failed = True
-                self.repair_type = 'CM'
-                self.time_to_repair = 10 #TODO
-                print('Calling corrective failure on M{} at t={}'.format(self.m, self.env.now))
-                self.process.interrupt()
-            elif self.maintenance_policy == 'CBM':
-                if self.health == self.CBM_threshold:
+                    '''
+                    Here we create a maintenance request without interrupting
+                    the machine's processing. The process is only interrupted
+                    once it seizes a maintenance resource and the job begins.
+                    '''                   
+                    #THIS METHOD WORKS
                     self.maintenance_request = self.system.repairman.request(priority=1)
-                    yield self.maintenance_request
-                    self.repair_type = 'CBM'
+                    
+                    yield self.maintenance_request # wait for repairman to become available
+                    print('M{} planned failure at t={}'.format(self.m, self.env.now))
                     self.process.interrupt()
-            
+
+            # check if a repair is requested
+            if self.need_repair:
+                self.maintenance_request = self.system.repairman.request(priority=1)
+                yield self.maintenance_request
+                self.need_repair = False
+                self.process.interrupt()
             yield self.env.timeout(1)
+
+    # def maintain(self):
+    #     while True:
+    #         # check for planned failures
+    #         for failure in self.planned_failures:
+    #             if failure[1] == self.env.now:
+    #                 self.time_to_repair = failure[2]
+    #                 self.repair_type = 'planned'
+    #                 self.failed = True
+    #                 print('Calling planned failure on M{}'.format(self.m))
+    #                 self.process.interrupt()
+            
+    #         if self.health == 10:
+    #             self.failed = True
+    #             self.repair_type = 'CM'
+    #             self.time_to_repair = 10 #TODO
+    #             print('Calling corrective failure on M{} at t={}'.format(self.m, self.env.now))
+    #             self.process.interrupt()
+    #         elif self.maintenance_policy == 'CBM':
+    #             if self.health == self.CBM_threshold:
+    #                 self.maintenance_request = self.system.repairman.request(priority=1)
+    #                 yield self.maintenance_request
+    #                 self.repair_type = 'CBM'
+    #                 self.process.interrupt()
+            
+    #         yield self.env.timeout(1)
