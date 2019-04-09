@@ -55,7 +55,7 @@ class Machine:
         self.last_repair = None
         self.failed = False
         self.repair_type = None
-        self.need_repair = False
+        self.request_preventive_repair = False
         # production state
         self.idle = True
         self.has_part = False
@@ -156,10 +156,7 @@ class Machine:
             except simpy.Interrupt: 
                 self.failing.interrupt() # stop degradation during maintenance
                 self.under_repair = True
-                print('M{} starting maintenance at t={}'.format(self.m, self.env.now))
-                # if self.repair_type == 'planned':
-                #     self.env.timeout(self.time_to_repair)
-                #     return
+                print('M{} stopped production at t={}'.format(self.m, self.env.now))
 
                 # processing interrupted due to failure
                 failure_start = self.env.now
@@ -216,6 +213,7 @@ class Machine:
                 if self.repair_type is not 'planned':
                     self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
                 # wait for repair to finish
+                print('M{} starting matinenance at t={}'.format(self.m, self.env.now))
                 for _ in range(self.time_to_repair):
                     yield self.env.timeout(1)
                     # record queue data
@@ -310,6 +308,7 @@ class Machine:
                         self.repair_type = 'CM'
                         #self.need_repair = True
                         
+                        #self.system.repairman.release(self.maintenance_request)
                         self.process.interrupt()
                         
                     # elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
@@ -324,10 +323,10 @@ class Machine:
                     #     yield self.maintenance_request
                     #     self.process.interrupt()
                         
-                    if (self.maintenance_policy == 'CBM') and (self.health >= self.CBM_threshold) and (not self.failed):
+                    if (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold) and (not self.failed):
                         # CBM threshold reached, request repair
-                        print('CBM requested at t={}'.format(self.env.now))
-                        self.need_repair = True
+                        print('M{} CBM requested at t={}'.format(self.m, self.env.now))
+                        self.request_preventive_repair = True
                         self.repair_type = 'CBM'
                         # if self.system.repairman.count == 0:
                         #     # only interrupt processing if repairman available
@@ -364,8 +363,8 @@ class Machine:
                     self.process.interrupt()
 
             # check if a repair is requested
-            if self.need_repair:
-                self.need_repair = False
+            if self.request_preventive_repair:
+                self.request_preventive_repair = False
                 self.maintenance_request = self.system.repairman.request(priority=1)
                 print('M{} requesting maintenance at t={}'.format(self.m, self.env.now))
                 yield self.maintenance_request
