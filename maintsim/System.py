@@ -108,8 +108,6 @@ class System:
         # create repairman object
         self.repairman = simpy.PriorityResource(self.env, capacity=self.maintenance_capacity)
 
-        # create source object
-
         # create objects for each machine
         self.buffers = []
         self.machines = []
@@ -164,8 +162,6 @@ class System:
                      'machine': self.machine_data,
                      'queue':self.queue_data,
                      'maintenance': self.maintenance_data}
-
-        self.next_for_repair = None
 
     def simulate(self, title='Simulation',
                  warmup_time=0,
@@ -288,6 +284,7 @@ class System:
                 sys.edge('B{}'.format(m),'M{}'.format(m+1))
         sys.edge('M{}'.format(self.M-1),'sink')
 
+        # orient horizontally
         sys.graph_attr['rankdir'] = 'LR'
 
         return sys
