@@ -56,6 +56,7 @@ class Machine:
         self.failed = False
         self.repair_type = None
         self.request_preventive_repair = False
+        self.under_repair = False
         # production state
         self.idle = True
         self.has_part = False
@@ -159,7 +160,7 @@ class Machine:
             except simpy.Interrupt: 
                 self.under_repair = True
                 self.failing.interrupt() # stop degradation during maintenance
-                print('M{} stopped production at t={}'.format(self.m, self.env.now))
+                #print('M{} stopped production at t={}'.format(self.m, self.env.now))
 
                 # processing interrupted due to failure
                 failure_start = self.env.now
@@ -167,13 +168,13 @@ class Machine:
                     self.maintenance.interrupt()
                     self.maintenance_request.cancel()
                     #self.maintenance_request.cancel()
-                    print('M{} canceled PM request at t={}'.format(self.m, self.env.now))
+                    #print('M{} canceled PM request at t={}'.format(self.m, self.env.now))
                     fail_time = self.env.now - self.system.warmup_time
                     # create maintenance request (after stopping production)
-                    print('M{} creating CM request at t={}'.format(self.m, self.env.now))
+                    #print('M{} creating CM request at t={}'.format(self.m, self.env.now))
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request
-                    print('M{} CM request yielded at t={}'.format(self.m, self.env.now))
+                    #print('M{} CM request yielded at t={}'.format(self.m, self.env.now))
                     
                 self.has_part = False
                 # check if part was finished before failure occured                
@@ -222,7 +223,7 @@ class Machine:
                 if self.repair_type is not 'planned':
                     self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
                 # wait for repair to finish
-                print('M{} starting matinenance at t={}'.format(self.m, self.env.now))
+                #print('M{} starting matinenance at t={}'.format(self.m, self.env.now))
                 for _ in range(self.time_to_repair):
                     yield self.env.timeout(1)
                     # record queue data
@@ -334,7 +335,7 @@ class Machine:
                         
                     if (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold) and (not self.failed):
                         # CBM threshold reached, request repair, assumes each degradation state is visited
-                        print('M{} CBM requested at t={}'.format(self.m, self.env.now))
+                        #print('M{} CBM requested at t={}'.format(self.m, self.env.now))
                         self.request_preventive_repair = True
                         self.repair_type = 'CBM'
                         # if self.system.repairman.count == 0:
@@ -345,11 +346,11 @@ class Machine:
                         #     yield self.maintenance_request
                         #     self.process.interrupt()
             except simpy.Interrupt:
-                print('degradation interrupted at t={}'.format(self.env.now))
+                #print('degradation interrupted at t={}'.format(self.env.now))
                 while self.under_repair:
                     yield self.env.timeout(1)
                 #print('degradation resumed at t={}'.format(self.env.now))
-                print('M{} resumed production at t={}'.format(self.m, self.env.now))
+                #print('M{} resumed production at t={}'.format(self.m, self.env.now))
 
     def maintain(self):
         while True:
@@ -368,7 +369,7 @@ class Machine:
                         self.maintenance_request = self.system.repairman.request(priority=1)
                         
                         yield self.maintenance_request # wait for repairman to become available
-                        print('M{} planned failure at t={}'.format(self.m, self.env.now))
+                        #print('M{} planned failure at t={}'.format(self.m, self.env.now))
                         self.failing.interrupt()
                         self.process.interrupt()
 
@@ -376,7 +377,7 @@ class Machine:
                 if self.request_preventive_repair:
                     self.request_preventive_repair = False
                     self.maintenance_request = self.system.repairman.request(priority=1)
-                    print('M{} requesting maintenance at t={}'.format(self.m, self.env.now))
+                    #print('M{} requesting maintenance at t={}'.format(self.m, self.env.now))
                     yield self.maintenance_request
                     #print('starting maintenance at t={}'.format(self.env.now))
                     
