@@ -54,8 +54,12 @@ class System:
             if self.failure_mode == 'degradation': # Markov degradation
                 if type(failure_params) == float:
                     self.degradation = [failure_params]*self.M
+                elif type(failure_params) == dict:
+                    self.degradation = failure_params['degradation_rate']
+                    self.failure_state = failure_params['failure_state']
                 else:
                     self.degradation = failure_params
+                    self.failure_state = 10
             elif self.failure_mode == 'reliability': # TTF distribution
                 if len(failure_params) == 1:
                     self.reliability = [failure_params]*self.M

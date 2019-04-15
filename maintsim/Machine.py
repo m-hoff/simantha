@@ -163,8 +163,11 @@ class Machine:
                 failure_start = self.env.now
                 if self.failed:
                     self.maintenance.interrupt()
-                    self.maintenance_request.cancel() # cancel preventive request
-                    
+                    try:
+                        self.maintenance_request.cancel() # cancel preventive request
+                    except:
+                        pass
+
                     fail_time = self.env.now - self.system.warmup_time
                     # create new corrective request (after stopping production)
                     self.maintenance_request = self.system.repairman.request(priority=1)
@@ -297,13 +300,13 @@ class Machine:
                 # degrade by one unit once loop breaks
                 yield self.env.timeout(1)
                 
-                if self.health < 10: # machine is NOT failed
+                if self.health < 5: # machine is NOT failed
                     self.health += 1 # degrade by one unit
 
                     # record current machine health
                     self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
-                    if self.health == 10: # machine fails
+                    if self.health == 5: # machine fails
                         self.failed = True
                         self.repair_type = 'CM'
                         #self.need_repair = True
