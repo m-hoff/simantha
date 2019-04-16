@@ -192,6 +192,7 @@ class Machine:
                     self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
                         
                     self.has_part = False
+                    
                 maintenance_start = self.env.now
                
                 # write failure data
