@@ -118,7 +118,8 @@ class Machine:
                 self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
-                if self.idle_stop - self.idle_start > 0:                  
+                if self.idle_stop - self.idle_start > 0:
+                    #if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, self.idle_start, self.idle_stop))                  
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     
@@ -151,6 +152,7 @@ class Machine:
                 
                 # check if machine was blocked
                 if self.idle_stop - self.idle_start > 0:
+                    #if self.m == 1: print('M{} blocked from t={} to t={}'.format(self.m, self.idle_start, self.idle_stop))
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     if self.env.now > self.system.warmup_time:
@@ -254,7 +256,7 @@ class Machine:
                 # machine was idle before failure                
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
                                              self.name+' forced idle'] = 1
-    
+                #if self.m == 1: print('M{} down for maint from t={} to t={}'.format(self.m, self.idle_start, failure_stop))
     def reliability(self): #TODO: validate random TTF reliability
         '''
         Machine failures based on TTF distribution. 
