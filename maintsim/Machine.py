@@ -27,16 +27,11 @@ class Machine:
         self.failure_mode = failure_mode
         if self.failure_mode == 'degradation': # Markov degradation
             self.degradation = failure_params
-        else: # TTF distribution
-            self.ttf_dist = failure_params
         
         # determine maintenance policy for machine
         self.maintenance_policy = self.system.maintenance_policy
         maintenance_parameters = self.system.maintenance_params
-        if self.maintenance_policy == 'PM':
-            self.PM_interval = maintenance_parameters['PM interval'][self.m]
-            self.PM_duration = maintenance_parameters['PM duration'][self.m]
-        elif self.maintenance_policy == 'CBM':
+        if self.maintenance_policy == 'CBM':
             self.CBM_threshold = maintenance_parameters['CBM threshold'][self.m]
         # 'None' maintenance policy == 'CM'
         
@@ -67,9 +62,6 @@ class Machine:
         if self.failure_mode == 'degradation':
             # start Markovian degradation process
             self.failing = self.env.process(self.degrade())
-        elif self.failure_mode == 'reliability':
-            # start random time to failure generation process
-            self.failing = self.env.process(self.reliability())
         # self.env.process(self.maintain())
         
         self.maintenance = self.env.process(self.maintain())
@@ -78,6 +70,9 @@ class Machine:
             self.env.process(self.debug_process())
                 
     def debug_process(self):
+        '''
+        Process that will loop once per simulation time step. 
+        '''
         while True:
             try:
                 if (self.m == 1):
@@ -95,8 +90,9 @@ class Machine:
 
     def working(self):
         '''
-        Main production function. Machine will process parts
-        until interrupted by failure. 
+        Main production function. Machine will process parts until interrupted 
+        by failure. A maintenance job will be carried out at the interruption
+        of production.
         '''
         while True:
             try:
@@ -257,37 +253,6 @@ class Machine:
                 self.system.machine_data.loc[self.idle_start:failure_stop-1, 
                                              self.name+' forced idle'] = 1
                 #if self.m == 1: print('M{} down for maint from t={} to t={}'.format(self.m, self.idle_start, failure_stop))
-    def reliability(self): #TODO: validate random TTF reliability
-        '''
-        Machine failures based on TTF distribution. 
-        '''        
-        while True:
-            # check for planned failures
-            for failure in self.planned_failures:
-                #TODO: make this a method?
-                if failure[1] == self.env.now:
-                    self.time_to_repair = failure[2]
-                    self.repair_type = 'planned'
-                    '''
-                    Here a maintenance request is created without interrupting
-                    the machine's processing. The process is only interrupted
-                    once it seizes a maintenance resource and the job begins.
-                    '''                  
-                    self.planned_request = self.system.repairman.request(priority=1)
-                    
-                    yield self.planned_request # wait for repairman to become available
-                    self.process.interrupt()
-                    
-            if not self.failed:
-                # generate TTF
-                ttf = self.ttf_dist.rvs()
-                yield self.env.timeout(ttf)
-                self.failed = True
-                self.repair_type = 'CM'
-                
-                self.process.interrupt()
-            else:
-                yield self.env.timeout(1)
             
     def degrade(self):
         '''
@@ -317,18 +282,6 @@ class Machine:
                         #self.system.repairman.release(self.maintenance_request)
                         self.process.interrupt()
                         
-                    # elif (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold):
-                    #     # hit CBM threshold, schedule maintenance
-                    #     # TODO schedule preventive CBM maintenance
-                    #     self.repair_type = 'CBM'
-                        
-                    #     # record CBM "failure"
-                    #     print('CBM triggered on {} at {}'.format(self.m, self.env.now))
-                        
-                    #     self.maintenance_request = self.system.repairman.request(priority=1)
-                    #     yield self.maintenance_request
-                    #     self.process.interrupt()
-                        
                     if (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold) and (not self.failed):
                         # CBM threshold reached, request repair, assumes each degradation state is visited
                         self.request_preventive_repair = True
@@ -339,6 +292,10 @@ class Machine:
                     yield self.env.timeout(1)            
 
     def maintain(self):
+        '''
+        Process for scheduling maintenance by generating maintenance resource
+        requests.
+        '''
         while True:
             try:
                 # check if a failure is planned
@@ -355,7 +312,6 @@ class Machine:
                         self.maintenance_request = self.system.repairman.request(priority=1)
                         
                         yield self.maintenance_request # wait for repairman to become available
-                        #print('M{} planned failure at t={}'.format(self.m, self.env.now))
                         self.failing.interrupt()
                         self.process.interrupt()
 
