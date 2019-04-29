@@ -9,6 +9,7 @@ simpy_test.ipynb
 maintsim/test.ipynb
 
 *.csv
+*.ipynb
 
 maintsim/.ipynb_checkpoints/test-checkpoint.ipynb
 maintsim.py
