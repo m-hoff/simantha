@@ -29,6 +29,7 @@ The workflow begins by creating a `System` object that is defined by the followi
   - `'CM'` - "corrective maintenance", the default policy, machines will only be repaired upon complete failure, as determined by the mode of degradation.
   - `'CBM'` - "condition-based maintenance", preventive maintenance is performed once a machine's condition reached a prescribed threshold.
 - `maintenance_params` - the parameters that define the specified maintenance policy. For `CBM`, a list of thresholds at which to schedule maintenance.
+  - Currently each machine has 11 health states, with 0 being perfect health and 10 being the failed state. The maintenance threshold should be in this range.
 - `repair_params` - a dictionary of `scipy.stats` frozen discrete distributions of time to repair based on repair type.
   - For example, `repair_params = {'CM': stats.randint(10, 20), 'CBM': stats.randint(20, 40)}`.
 - `maintenance_capacity` - the maximum number of maintenance jobs that can be executed simultaneously. Currently if the number of simultaneously scheduled maintenance jobs exceeds the capacity they will be handled in a first in, first out (FIFO) manner.
@@ -81,15 +82,16 @@ Here is a minimum example for implmenting a CBM policy:
 >>> system.simulate(warmup_time=100, sim_time=500)
  Simulation complete in 0.89s
  
-  Units produced:      31
-  System availability: 68.93%
+   Units produced:      31
+   System availability: 68.93%
 ```
 
-### Planned features
+## Planned features
 
 Key planned features include
 
 - Replication of the simulation to sample objective function values
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
-- Non-homogeneous degradation modes
+- Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix. 
 - Exporting system model for reuse
+- Customizable `Scheduler` class for scenarios the number of machines due for maitnenance exceeds the maintenance capacity. 
