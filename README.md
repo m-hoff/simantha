@@ -6,6 +6,15 @@
 
 Currently, the easiest way to install maintsim is to clone the repository using `git clone https://github.com/m-hoff/maintsim.git`. 
 
+Use the `sys` module to add maintsim to your path:
+
+```python
+import sys
+maintsim_path = '.../maintsim'
+sys.path.append(maintsim_path)
+```
+where `maintsim_path` is the location of your maintsim installation. This should allow you to execute all of the provided examples. 
+
 ## Using this package
 
 ### Setting up a manufacturing system
@@ -80,11 +89,13 @@ Here is a minimum example for implmenting a CBM policy:
 ...                                         'CBM': stats.randint(10,20)},
 ...                          maintenance_capacity=1)
 >>> system.simulate(warmup_time=100, sim_time=500)
- Simulation complete in 0.89s
+ Simulation complete in 0.89 s
  
    Units produced:      31
    System availability: 68.93%
 ```
+
+See `demo.ipynb` for more examples. 
 
 ## Planned features
 
@@ -94,4 +105,4 @@ Key planned features include
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
 - Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix. 
 - Exporting system model for reuse
-- Customizable `Scheduler` class for scenarios the number of machines due for maitnenance exceeds the maintenance capacity. 
+- Customizable `Scheduler` class for scenarios where the number of machines due for maitnenance exceeds the maintenance capacity. 
