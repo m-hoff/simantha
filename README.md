@@ -2,6 +2,10 @@
 
 `maintsim` can be used to model a discrete manufacturing system where components degrade over time and recieve maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
 
+## Installing maintsim
+
+Currently, the easiest way to install maintsim is to clone the repository using `git clone https://github.com/m-hoff/maintsim.git`. 
+
 ## Using this package
 
 ### Setting up a manufacturing system
@@ -57,7 +61,29 @@ Several data frames are created to record data of a simulation run and stored as
 
 - The method `System.draw()` will display the system layout (only tested in jupyter notebooks).
 
----
+## A simple example
+
+Here is a minimum example for implmenting a CBM policy:
+
+```python
+>>> import maintsim
+>>> from scipy import stats
+>>> 
+>>> system = maintsim.System(process_times=[3, 5, 4],
+...                          buffer_sizes=5,
+...                          failure_mode='degradation',
+...                          failure_params=[0.25, 0.1, 0.2],
+...                          maintenance_policy='CBM',
+...                          maintenance_params={'CBM threshold': [8, 6, 7]},
+...                          repair_params={'CM': stats.randint(20,30),
+...                                         'CBM': stats.randint(10,20)},
+...                          maintenance_capacity=1)
+>>> system.simulate(warmup_time=100, sim_time=500)
+ Simulation complete in 0.89s
+ 
+  Units produced:      31
+  System availability: 68.93%
+```
 
 ### Planned features
 
