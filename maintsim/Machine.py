@@ -53,6 +53,7 @@ class Machine:
         self.health = initial_health
         self.last_repair_time = None
         self.failed = False
+        self.request_maintenance = False
         self.repair_type = None
         self.request_preventive_repair = False
         self.under_repair = False
@@ -73,6 +74,9 @@ class Machine:
         # self.env.process(self.maintain())
         
         self.maintenance = self.env.process(self.maintain())
+        self.maintenance_request = None
+
+        #self.env.process(self.update_priority())
 
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -81,11 +85,11 @@ class Machine:
         while True:
             try:
                 if (self.m == 1):
-                    #print('t={}, r={}'.format(self.env.now, self.system.repairman.count))
-                    print('{}'.format(self.env.now),
-                          self.system.repairman.get_queue, 
-                          self.system.repairman.users,
-                          self.system.repairman.put_queue)
+                    print('t={}'.format(self.env.now), self.request_maintenance)
+                    #print('{}'.format(self.env.now),
+                    #      self.system.repairman.get_queue, 
+                    #      self.system.repairman.users,
+                    #      self.system.repairman.put_queue)
                 #else:
                 #    print(self.health)
                 yield self.env.timeout(1)
@@ -158,7 +162,8 @@ class Machine:
                     if self.env.now > self.system.warmup_time:
                         self.total_downtime += (self.idle_stop - self.idle_start)
                                 
-            except simpy.Interrupt: 
+            except simpy.Interrupt:
+                self.request_maintenance = True
                 self.under_repair = True 
                 self.failing.interrupt() # stop degradation during maintenance                
 
@@ -174,7 +179,8 @@ class Machine:
                     # create new corrective request (after stopping production)
                     self.maintenance_request = self.system.repairman.request(priority=1)
                     yield self.maintenance_request                    
-                    
+                    print('M{} yielded CM request at t={}'.format(self.m, self.env.now))
+
                 self.has_part = False
                 # check if part was finished before failure occured                
                 if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
@@ -227,11 +233,27 @@ class Machine:
 
                 # repairman is released
                 self.system.repairman.release(self.maintenance_request)
+                self.maintenance_request = None
+                print('M{}, t={}'.format(self.m, self.env.now))
+
+                # update other machine priorities
+                if self.system.scheduling is not 'fifo':
+                    for machine in self.system.machines:
+                        if machine.maintenance_request: # machine has a request
+                            print('Updating M{} priority at t={}'.format(machine.m, machine.env.now))
+                            machine.maintenance_request.cancel()
+                            priority = machine.get_priority()
+                            machine.maintenance_request = machine.system.repairman.request(priority=priority)
+                            yield machine.maintenance_request
+                            print('new request yielded for M{} at t={}'.format(machine.m, machine.env.now))
+                            #machine.process.interrupt()
+                            #machine.update_priority()
                 
                 self.health = 0
                 self.last_repair_time = self.env.now
                 self.failed = False
                 self.under_repair = False
+                self.request_maintenance = False
 
                 # record restored health
                 self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
@@ -303,13 +325,13 @@ class Machine:
                 # degrade by one unit once loop breaks
                 yield self.env.timeout(1)
                 
-                if self.health < 5: # machine is NOT failed
+                if self.health < 10: # machine is NOT failed
                     self.health += 1 # degrade by one unit
 
                     # record current machine health
                     self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
-                    if self.health == 5: # machine fails
+                    if self.health == 10: # machine fails
                         self.failed = True
                         self.repair_type = 'CM'
                         #self.need_repair = True
@@ -331,6 +353,7 @@ class Machine:
                         
                     if (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold) and (not self.failed):
                         # CBM threshold reached, request repair, assumes each degradation state is visited
+                        self.request_maintenance = True
                         self.request_preventive_repair = True
                         self.repair_type = 'CBM'
             except simpy.Interrupt:
@@ -339,6 +362,10 @@ class Machine:
                     yield self.env.timeout(1)            
 
     def maintain(self):
+        '''
+        Check for planned downtime events and request maintenance if flagged for
+        preventive repair.
+        '''
         while True:
             try:
                 # check if a failure is planned
@@ -352,6 +379,7 @@ class Machine:
                         once it seizes a maintenance resource and the job begins.
                         '''                   
                         #THIS METHOD WORKS
+                        self.request_maintenance = True
                         self.maintenance_request = self.system.repairman.request(priority=1)
                         
                         yield self.maintenance_request # wait for repairman to become available
@@ -371,3 +399,18 @@ class Machine:
             except simpy.Interrupt:
                 while self.under_repair:
                     yield self.env.timeout(1)
+
+    def get_priority(self):
+        return 1
+
+    def update_priority(self):
+        '''
+        Update the maintenance priority for this machine.
+        '''
+        print('updating M{} priority at t={}'.format(self.m, self.env.now))
+        if (self.maintenance_request) and (not self.under_repair):
+            # delete request, update priority 
+            self.maintenance_request.cancel()
+            priority = self.get_priority()
+            self.maintenance_request = self.system.repairman.request(priority=priority)
+            yield self.maintenance_request

@@ -28,6 +28,9 @@ class System:
                  maintenance_capacity=None,
                  maintenance_costs=None, # dict of cost by job type
 
+                 scheduler=None, # maintenance scheduling object
+                 scheduling='fifo',
+
                  debug=False):
 
         # inferred system characteristics
@@ -91,6 +94,13 @@ class System:
             # no capacity by default
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
+
+        if scheduler: # custom scheduler
+            self.scheduler = scheduler
+        else: #FIFO scheduler
+            pass
+
+        self.scheduling = scheduling
 
         self.debug = debug
 
