@@ -1,4 +1,5 @@
 import simpy
+import numpy as np
 import pandas as pd
 from random import random
 
@@ -234,20 +235,27 @@ class Machine:
                 # repairman is released
                 self.system.repairman.release(self.maintenance_request)
                 self.maintenance_request = None
-                print('M{}, t={}'.format(self.m, self.env.now))
+                print('M{} repaired at t={}'.format(self.m, self.env.now))
 
                 # update other machine priorities
                 if self.system.scheduling is not 'fifo':
+                    max_priority = -1
+                    next_machine = None
                     for machine in self.system.machines:
                         if machine.maintenance_request: # machine has a request
-                            print('Updating M{} priority at t={}'.format(machine.m, machine.env.now))
-                            machine.maintenance_request.cancel()
+                            #print('Updating M{} priority at t={}'.format(machine.m, machine.env.now))
+                            #machine.maintenance_request.cancel()
                             priority = machine.get_priority()
-                            machine.maintenance_request = machine.system.repairman.request(priority=priority)
-                            yield machine.maintenance_request
-                            print('new request yielded for M{} at t={}'.format(machine.m, machine.env.now))
-                            #machine.process.interrupt()
-                            #machine.update_priority()
+                            print('t={}, M{} priority={}'.format(self.env.now, machine.m, priority))
+                            if priority > max_priority:
+                                max_priority = priority
+                                next_machine = machine
+                            #machine.maintenance_request = machine.system.repairman.request(priority=priority)
+                            #yield machine.maintenance_request
+                            #print('new request yielded for M{} at t={}'.format(machine.m, machine.env.now))
+                    if next_machine:
+                        # start maintenance on next machine
+                        next_machine.process.interrupt()                                                    
                 
                 self.health = 0
                 self.last_repair_time = self.env.now
@@ -332,6 +340,7 @@ class Machine:
                     self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
                     if self.health == 10: # machine fails
+                        print('M{} failed at t={}'.format(self.m, self.env.now))
                         self.failed = True
                         self.repair_type = 'CM'
                         #self.need_repair = True
@@ -401,7 +410,7 @@ class Machine:
                     yield self.env.timeout(1)
 
     def get_priority(self):
-        return 1
+        return self.m
 
     def update_priority(self):
         '''
