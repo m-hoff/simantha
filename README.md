@@ -103,4 +103,4 @@ Key planned features include
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
 - Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix
 - Exporting system model for reuse
-- Customizable `Scheduler` class for scenarios the number of machines due for maitnenance exceeds the maintenance capacity
+- Customizable `Scheduler` class for scenarios where the number of machines due for maitnenance exceeds the maintenance capacity
