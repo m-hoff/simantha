@@ -8,6 +8,15 @@ Currently, the easiest way to install maintsim is to clone the repository using 
 
 ## Using this package
 
+### Requirements
+
+maintsim relies on the following packages in addition to Python 3.7:
+
+- [SimPy](https://simpy.readthedocs.io/en/latest/) version 3.0.11
+- [pandas](https://pandas.pydata.org/) version >= 0.23.4
+- [SciPy](https://www.scipy.org) version >= 1.1.0 (if specifying random repair times)
+- [Graphviz](https://graphviz.readthedocs.io/en/stable/) version 0.10.1 (untested)
+
 ### Setting up a manufacturing system
 
 The workflow begins by creating a `System` object that is defined by the following parameters:
@@ -80,10 +89,10 @@ Here is a minimum example for implmenting a CBM policy:
 ...                                         'CBM': stats.randint(10,20)},
 ...                          maintenance_capacity=1)
 >>> system.simulate(warmup_time=100, sim_time=500)
- Simulation complete in 0.89s
+Simulation complete in 0.89 s
  
-   Units produced:      31
-   System availability: 68.93%
+  Units produced:      31
+  System availability: 68.93%
 ```
 
 ## Planned features
@@ -92,6 +101,6 @@ Key planned features include
 
 - Replication of the simulation to sample objective function values
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
-- Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix. 
+- Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix
 - Exporting system model for reuse
-- Customizable `Scheduler` class for scenarios the number of machines due for maitnenance exceeds the maintenance capacity. 
+- Customizable `Scheduler` class for scenarios the number of machines due for maitnenance exceeds the maintenance capacity
