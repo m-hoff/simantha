@@ -14,6 +14,7 @@ class System:
     '''
     def __init__(self,
                  process_times,
+                 initial_remaining_process=None,
                  interarrival_time=1, # int
                  buffer_sizes=1, # list or int
                  initial_buffer=0,
@@ -31,6 +32,8 @@ class System:
 
                  scheduler_class=None, # maintenance scheduling object
                  scheduling='fifo',
+                 
+                 #initiate={}, # initiate system state variables
 
                  debug=False):
 
@@ -41,6 +44,7 @@ class System:
 
         # specified system characteristics
         self.process_times = process_times
+        self.initial_remaining_process = initial_remaining_process
         self.interarrival_time = interarrival_time
         if type(buffer_sizes) == int:
             self.buffer_sizes = [buffer_sizes]*(self.M-1)
@@ -51,6 +55,11 @@ class System:
             self.initial_buffer = [initial_buffer]*(self.M-1)
         else:
             self.initial_buffer = initial_buffer
+
+        # if 'buffer levels' in initiate.keys():
+        #     self.initial_buffer = initiate['buffer levels']
+        # else:
+        #     self.initial_buffer = [0] * (self.M-1)
 
         self.failure_mode = failure_mode
         self.failure_params = failure_params
@@ -78,6 +87,11 @@ class System:
         else:
             self.initial_health = [0]*self.M
 
+        # if 'machine health' in initiate.keys():
+        #     self.initial_health = initiate['machine health']
+        # else:
+        #     self.initial_health = [0] * self.M
+
         self.repair_params = repair_params
 
         #self.failures = failures
@@ -98,6 +112,7 @@ class System:
 
         #self.scheduling = scheduling
 
+        #self.initiate = initiate
         self.debug = debug
 
         if scheduler_class:
@@ -152,6 +167,11 @@ class System:
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
                               self.failure_mode, self.failure_params[m], 
                               self.initial_health[m], self)]
+
+            if self.initial_remaining_process:
+                self.machines[m].remaining_process_time = self.initial_remaining_process[m]
+            # if 'remaining process time' in self.initiate.keys():
+            #     self.machines[m] = self.initiate['remaining process time'][m]
 
         self.scheduler = self.scheduler_class(self, self.env)
 
@@ -275,7 +295,7 @@ class System:
                 obj += [self.machines[-1].parts_made]
             #TODO: objectives - PMOW, availability, cost
         print('{} replications finished in {:.2f}s'.format(replications, time.time()-start_time))                
-        return obj
+        return obj    
 
     def draw(self):
         '''

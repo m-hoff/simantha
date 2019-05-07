@@ -3,6 +3,8 @@ import random
 import numpy as np
 import simpy
 
+from .System import System
+
 class Scheduler:
     '''
     Maintenance scheduler class.

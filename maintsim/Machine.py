@@ -124,7 +124,7 @@ class Machine:
                 
                 #self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
                  
-                self.remaining_process_time = self.process_time
+                #self.remaining_process_time = self.process_time
                     
                 # check if machine was starved
                 if self.idle_stop - self.idle_start > 0:
@@ -136,7 +136,7 @@ class Machine:
                         self.total_downtime += (self.idle_stop - self.idle_start)
                 
                 # process part
-                for _ in range(self.process_time):
+                while self.remaining_process_time:
                     self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
                     yield self.env.timeout(1)
                     
@@ -159,6 +159,8 @@ class Machine:
                 
                 self.has_part = False
                 
+                self.remaining_process_time = self.process_time
+
                 # check if machine was blocked
                 if self.idle_stop - self.idle_start > 0:
                     #if self.m == 1: print('M{} blocked from t={} to t={}'.format(self.m, self.idle_start, self.idle_stop))
