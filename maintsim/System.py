@@ -6,6 +6,7 @@ import pandas as pd
 from graphviz import Digraph
 
 from .Machine import Machine
+from .Scheduler import Scheduler
 
 class System:
     '''
@@ -95,16 +96,21 @@ class System:
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
 
-        if scheduler: # custom scheduler
-            self.scheduler = scheduler
-        else: #FIFO scheduler
-            pass
-
         self.scheduling = scheduling
 
         self.debug = debug
 
+        self.scheduler = scheduler
+
         self.initialize() # initialize system objects
+
+        
+
+        # if scheduler: # custom scheduler
+        #     self.scheduler = scheduler
+        # else: # default FIFO scheduler
+        #     print('Creating FIFO scheduler')
+        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
 
         # simulation parameters
         self.warmup_time = 0
@@ -121,6 +127,7 @@ class System:
 
         # create repairman object
         self.repairman = simpy.PriorityResource(self.env, capacity=self.maintenance_capacity)
+        self.available_maintenance = self.maintenance_capacity
 
         # create objects for each machine
         self.buffers = []
@@ -144,6 +151,12 @@ class System:
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
                               self.failure_mode, self.failure_params[m], 
                               self.initial_health[m], self)]
+
+        # if self.scheduler: # custom scheduler
+        #     self.scheduler = self.scheduler
+        # else: # default FIFO scheduler
+        #     print('Creating FIFO scheduler')
+        self.scheduler = Scheduler(self, self.env, policy='fifo')
 
         # initialize system data collection
         state_cols = ['time']     # system state data
