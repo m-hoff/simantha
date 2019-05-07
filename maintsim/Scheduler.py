@@ -14,7 +14,8 @@ class Scheduler:
 
     def choose_next(self):
         '''
-        Choose the next machine on which to perform maintenance. 
+        Choose the next machine on which to perform maintenance. Returns the 
+        index of the chosen machine.
         '''
         queue = []              
         for machine in self.system.machines:
