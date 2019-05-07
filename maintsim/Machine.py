@@ -76,7 +76,7 @@ class Machine:
             self.failing = self.env.process(self.reliability())
         # self.env.process(self.maintain())
         
-        self.maintenance = self.env.process(self.maintain())
+        #self.maintenance = self.env.process(self.maintain())
         self.maintenance_request = None
 
         #self.env.process(self.update_priority())
@@ -169,6 +169,21 @@ class Machine:
                                 
             except simpy.Interrupt:
                 self.down = True
+
+                # write failure
+                if self.last_repair_time:
+                    TTF = self.env.now - self.last_repair_time
+                else:
+                    TTF = 'NA'
+
+                new_failure = pd.DataFrame({'time':[self.env.now],
+                                        'machine':[self.m],
+                                        'type':[self.repair_type],
+                                        'activity':['failure'],
+                                        'duration':[TTF]})
+                self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
+
+                # stop production until online
                 while self.down:
                     yield self.env.timeout(1)
 
@@ -188,7 +203,7 @@ class Machine:
 
             downtime_start = self.env.now
             if self.failed:
-                self.maintenance.interrupt()
+                #self.maintenance.interrupt()
                 try:
                     self.maintenance_request.cancel() # cancel preventive request
                 except:
@@ -231,12 +246,12 @@ class Machine:
             if not self.failed:
                 fail_time = self.env.now - self.system.warmup_time
 
-            new_failure = pd.DataFrame({'time':[fail_time],
-                                        'machine':[self.m],
-                                        'type':[self.repair_type],
-                                        'activity':['failure'],
-                                        'duration':[TTF]})
-            self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
+            # new_failure = pd.DataFrame({'time':[fail_time],
+            #                             'machine':[self.m],
+            #                             'type':[self.repair_type],
+            #                             'activity':['failure'],
+            #                             'duration':[TTF]})
+            # self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
 
             #TODO: get priority
             
@@ -253,7 +268,7 @@ class Machine:
             # repairman is released
             self.system.repairman.release(self.maintenance_request)
             self.maintenance_request = None
-            print('M{} repaired at t={}'.format(self.m, self.env.now))
+            #print('M{} repaired at t={}'.format(self.m, self.env.now))
 
             # update other machine priorities
             # if self.system.scheduling is not 'fifo':
@@ -308,8 +323,6 @@ class Machine:
             
             self.system.available_maintenance += 1 # release maintenance resource
 
-            print('maintenance complete for M{}'.format(self.m))
-
     def reliability(self): #TODO: validate random TTF reliability
         '''
         Machine failures based on TTF distribution. 
@@ -363,10 +376,12 @@ class Machine:
                     self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
                     if self.health == 10: # machine fails
-                        print('M{} failed at t={}'.format(self.m, self.env.now))
+                        #print('M{} failed at t={}'.format(self.m, self.env.now))
                         self.failed = True
                         self.repair_type = 'CM'
                         self.request_maintenance = True
+                        if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
+                            self.time_entered_queue = self.env.now                        
                         #self.system.repairman.release(self.maintenance_request)
                         # TODO: scheduler should assign maintenance here
                         #self.assigned_maintenance = True
@@ -377,6 +392,7 @@ class Machine:
                         self.request_maintenance = True
                         #self.request_preventive_repair = True
                         self.repair_type = 'CBM'
+                        self.time_entered_queue = self.env.now
 
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair

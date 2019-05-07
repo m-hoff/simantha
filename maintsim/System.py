@@ -29,7 +29,7 @@ class System:
                  maintenance_capacity=None,
                  maintenance_costs=None, # dict of cost by job type
 
-                 scheduler=None, # maintenance scheduling object
+                 scheduler_class=None, # maintenance scheduling object
                  scheduling='fifo',
 
                  debug=False):
@@ -96,15 +96,16 @@ class System:
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
 
-        self.scheduling = scheduling
+        #self.scheduling = scheduling
 
         self.debug = debug
 
-        self.scheduler = scheduler
+        if scheduler_class:
+            self.scheduler_class = scheduler_class
+        else:
+            self.scheduler_class = Scheduler
 
-        self.initialize() # initialize system objects
-
-        
+        self.initialize() # initialize system objects        
 
         # if scheduler: # custom scheduler
         #     self.scheduler = scheduler
@@ -152,11 +153,12 @@ class System:
                               self.failure_mode, self.failure_params[m], 
                               self.initial_health[m], self)]
 
-        # if self.scheduler: # custom scheduler
-        #     self.scheduler = self.scheduler
+        self.scheduler = self.scheduler_class(self, self.env)
+
+        # if self.scheduler: # custom or existing scheduler
+        #     self.scheduler.__init__(self, self.env)
         # else: # default FIFO scheduler
-        #     print('Creating FIFO scheduler')
-        self.scheduler = Scheduler(self, self.env, policy='fifo')
+        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
 
         # initialize system data collection
         state_cols = ['time']     # system state data
