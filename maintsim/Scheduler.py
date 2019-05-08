@@ -40,13 +40,13 @@ class Scheduler:
         # MCTS should be solved here
 
         n_machines_to_schedule = self.system.available_maintenance
-        next_machines =[]
+        next_machines = []
         while n_machines_to_schedule:
-            next_machine = queue[np.argmin([m.time_entered_queue for m in queue])]
+            next_machine = queue[np.argmin([m.time_entered_queue if m.time_entered_queue else self.env.now for m in queue])]
             next_machines.append(next_machine)
             n_machines_to_schedule -= 1
 
-        return next_machines
+        return next_machines # returns machine that will begin maintenance
 
     def scheduling(self):            
         '''
@@ -78,6 +78,6 @@ class Scheduler:
                     for machine in queue:
                         machine.assigned_maintenance = True
                 else: # len(queue) > capacity
-                    #print('Multiple machines in queue')
+                    # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
                         machine.assigned_maintenance = True                

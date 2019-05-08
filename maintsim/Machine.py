@@ -94,12 +94,12 @@ class Machine:
             self.failing = self.env.process(self.reliability())
         # self.env.process(self.maintain())
         
-        #self.maintenance = self.env.process(self.maintain())
-        self.maintenance_request = None
+        self.planned_downtime = self.env.process(self.scheduled_failures())
+        #self.maintenance_request = None
 
         #self.env.process(self.update_priority())
 
-        self.env.process(self.under_maintenance())
+        self.env.process(self.maintain())
 
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -156,6 +156,7 @@ class Machine:
                 # process part
                 while self.remaining_process_time:
                     self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
+                    self.system.machine_data.loc[self.env.now, self.name+' forced idle'] = 0 
                     yield self.env.timeout(1)
                     
                     self.remaining_process_time -= 1
@@ -208,7 +209,7 @@ class Machine:
                 while self.down:
                     yield self.env.timeout(1)
 
-    def under_maintenance(self):
+    def maintain(self):
         while True:
             while not self.assigned_maintenance:
                 # wait to be scheduled for maintenance
@@ -230,7 +231,7 @@ class Machine:
                 except:
                     pass
 
-                    fail_time = self.env.now - self.system.warmup_time
+                    #fail_time = self.env.now - self.system.warmup_time
                     # create new corrective request (after stopping production)
                     #self.maintenance_request = self.system.repairman.request(priority=1)
                     #yield self.maintenance_request                    
@@ -287,7 +288,7 @@ class Machine:
                 self.system.queue_data.loc[self.env.now, 'contents'] = len(self.system.repairman.queue)
 
             # repairman is released
-            self.system.repairman.release(self.maintenance_request)
+            #self.system.repairman.release(self.maintenance_request)
             self.maintenance_request = None
             #print('M{} repaired at t={}'.format(self.m, self.env.now))
 
@@ -375,7 +376,7 @@ class Machine:
                 self.process.interrupt()
             else:
                 yield self.env.timeout(1)
-            
+
     def degrade(self):
         '''
         Discrete state Markovian degradation process. 
@@ -427,9 +428,9 @@ class Machine:
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
                 while self.under_repair:
-                    yield self.env.timeout(1)            
+                    yield self.env.timeout(1)
 
-    def maintain(self):
+    def scheduled_failures(self):
         '''
         Check for planned downtime events and request maintenance if flagged for
         preventive repair.
@@ -456,12 +457,12 @@ class Machine:
                         self.process.interrupt()
 
                 # check if a repair is requested
-                if self.request_preventive_repair:
-                    self.request_preventive_repair = False
-                    self.maintenance_request = self.system.repairman.request(priority=1)                    
-                    yield self.maintenance_request # request PM            
+                # if self.request_preventive_repair:
+                #     self.request_preventive_repair = False
+                #     self.maintenance_request = self.system.repairman.request(priority=1)                    
+                #     yield self.maintenance_request # request PM            
                     
-                    self.process.interrupt() # request granted, interrupt production
+                #     self.process.interrupt() # request granted, interrupt production
                 yield self.env.timeout(1)
 
             except simpy.Interrupt:
@@ -492,7 +493,7 @@ class Machine:
         else:
             TTF = 'NA'
 
-        new_failure = pd.DataFrame({'time':[self.env.now],
+        new_failure = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
                                     'machine':[self.m],
                                     'type':[self.repair_type],
                                     'activity':['failure'],

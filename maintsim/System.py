@@ -2,6 +2,7 @@ import simpy
 
 import time
 import random
+import numpy as np
 import pandas as pd
 from graphviz import Digraph
 
@@ -264,7 +265,9 @@ class System:
             self.machine_data[col1] = self.machine_data[col1].fillna(1)
 
             col2 = 'M{} forced idle'.format(m)
-            self.machine_data[col2] = self.machine_data[col2].fillna(0)
+            self.machine_data[col2] = self.machine_data[col2].fillna(1)
+
+            self.machines[m].total_downtime = sum(self.machine_data[col2])
 
             self.machine_data['M{} health'.format(m)].astype(int)
 
@@ -285,17 +288,36 @@ class System:
 
             print('  System availability: {:.2f}%\n'.format(avail*100))
 
-    def iterate_simulation(self, replications, warmup_time, sim_time, 
-                           objective, verbose=True):
+    def iterate_simulation(self, replications, warmup_time=0, sim_time=100, 
+                           objective='production', verbose=True):
         start_time = time.time()                           
         obj = []
         for _ in range(replications):
             self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
         
             if objective == 'production':
-                obj += [self.machines[-1].parts_made]
-            #TODO: objectives - PMOW, availability, cost
-        print('{} replications finished in {:.2f}s'.format(replications, time.time()-start_time))                
+                production = [self.machines[-1].parts_made]
+                obj.append(production)
+                units = 'units'
+            elif objective == 'ppl':
+                ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
+                obj.append(ppl)
+                units = 'units lost production'
+            elif objective == 'availability':
+                functional = ['M{} functional'.format(m) for m in range(self.M)]
+                functional = self.machine_data[self.machine_data['time'] >= 0][functional]
+                avail = 100*functional.sum().sum() / (self.M * self.sim_time)
+                obj.append(avail)
+                units = '% availability'
+
+        stop_time = time.time()
+        total_time = stop_time - start_time
+        
+        if verbose:
+            print('{} replications finished in {:.2f}s, {:.2f}s/rep'
+                  .format(replications, total_time, total_time/replications))
+            print('Average objective: {:.2f} {}'.format(np.mean(obj), units))
+        
         return obj    
 
     def draw(self):
