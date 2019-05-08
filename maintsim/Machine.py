@@ -1,6 +1,8 @@
-import simpy
 import numpy as np
 import pandas as pd
+
+import simpy
+
 from random import random
 
 class Machine:
@@ -15,7 +17,8 @@ class Machine:
                  failure_mode,
                  failure_params,
                  initial_health,
-                 system):
+                 system,
+                 allow_new_maintenance):
                  
         self.env = env
         self.system = system
@@ -41,6 +44,8 @@ class Machine:
             self.CBM_threshold = maintenance_parameters['CBM threshold'][self.m]
         # 'None' maintenance policy == 'CM'
         
+        self.allow_new_maintenance = allow_new_maintenance
+
         # assign input buffer
         if self.m > 0:
             self.in_buff = self.system.buffers[self.m-1]
@@ -55,9 +60,22 @@ class Machine:
         self.last_repair_time = None
         self.failed = False
         self.down = False
-        self.request_maintenance = False
+        
+        # set maintenance request state based on initial health
+        if ((self.maintenance_policy == 'CBM') 
+            and (self.CBM_threshold <= self.health < 10)):
+            self.request_maintenance = True
+            self.repair_type = 'CBM'
+        elif self.health == 10:
+            self.request_maintenance = True
+            self.repair_type = 'CM'
+            self.failed = True
+        else:
+            self.request_maintenance = False
+            self.repair_type = None
+        
         self.assigned_maintenance = False
-        self.repair_type = None
+        
         self.request_preventive_repair = False
         self.under_repair = False
         # production state
@@ -173,17 +191,18 @@ class Machine:
                 self.down = True
 
                 # write failure
-                if self.last_repair_time:
-                    TTF = self.env.now - self.last_repair_time
-                else:
-                    TTF = 'NA'
+                self.write_failure()
+                # if self.last_repair_time:
+                #     TTF = self.env.now - self.last_repair_time
+                # else:
+                #     TTF = 'NA'
 
-                new_failure = pd.DataFrame({'time':[self.env.now],
-                                        'machine':[self.m],
-                                        'type':[self.repair_type],
-                                        'activity':['failure'],
-                                        'duration':[TTF]})
-                self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
+                # new_failure = pd.DataFrame({'time':[self.env.now],
+                #                         'machine':[self.m],
+                #                         'type':[self.repair_type],
+                #                         'activity':['failure'],
+                #                         'duration':[TTF]})
+                # self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
 
                 # stop production until online
                 while self.down:
@@ -377,24 +396,33 @@ class Machine:
                     # record current machine health
                     self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
-                    if self.health == 10: # machine fails
+                    if (self.health == 10): # machine fails
                         #print('M{} failed at t={}'.format(self.m, self.env.now))
                         self.failed = True
                         self.repair_type = 'CM'
-                        self.request_maintenance = True
+                        
+                        if self.allow_new_maintenance:
+                            self.request_maintenance = True
+                        
                         if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
                             self.time_entered_queue = self.env.now                        
                         #self.system.repairman.release(self.maintenance_request)
                         # TODO: scheduler should assign maintenance here
                         #self.assigned_maintenance = True
                         self.process.interrupt()
-                        
-                    if (self.maintenance_policy == 'CBM') and (self.health == self.CBM_threshold) and (not self.failed):
+
+                    # TODO: validate elif here  
+                    elif ((self.maintenance_policy == 'CBM') 
+                          and (self.health >= self.CBM_threshold) 
+                          and (not self.failed)
+                          and (self.allow_new_maintenance)):
                         # CBM threshold reached, request repair, assumes each degradation state is visited
                         self.request_maintenance = True
                         #self.request_preventive_repair = True
                         self.repair_type = 'CBM'
                         self.time_entered_queue = self.env.now
+
+                        self.write_failure()                        
 
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
@@ -454,3 +482,20 @@ class Machine:
             priority = self.get_priority()
             self.maintenance_request = self.system.repairman.request(priority=priority)
             yield self.maintenance_request
+    
+    def write_failure(self):
+        '''
+        Write new failure occurence to simulation data.
+        '''
+        if self.last_repair_time:
+            TTF = self.env.now - self.last_repair_time
+        else:
+            TTF = 'NA'
+
+        new_failure = pd.DataFrame({'time':[self.env.now],
+                                    'machine':[self.m],
+                                    'type':[self.repair_type],
+                                    'activity':['failure'],
+                                    'duration':[TTF]})
+
+        self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 

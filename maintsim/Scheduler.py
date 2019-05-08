@@ -1,29 +1,44 @@
-import random
-
 import numpy as np
+
 import simpy
 
-from .System import System
+#from .System import System
 
 class Scheduler:
     '''
-    Maintenance scheduler class.
+    Default maintenance scheduler class. Should only take two arguments, the
+    system object that it services and the simulation environment.
     '''
     def __init__(self,
-                 system,
-                 env):
+                 system=None,
+                 env=None):
         
-        self.system = system
+        # self.system = system
 
+        # self.env = env
+
+        # self.env.process(self.scheduling())
+
+        if system:
+            self.initialize(system, env)
+
+    def initialize(self, system, env):
+        '''
+        Initialize scheduler with new system and simulation environment. 
+        '''
+        self.system = system
         self.env = env
 
         self.env.process(self.scheduling())
 
     def choose_next(self, queue):
         '''
-        Choose the next machine on which to perform maintenance. Returns the 
-        the chosen machine object.
+        Choose the next machines on which to perform maintenance. Returns the 
+        the chosen machine objects which are then flagged by the scheduling 
+        method.
         '''
+        # MCTS should be solved here
+
         n_machines_to_schedule = self.system.available_maintenance
         next_machines =[]
         while n_machines_to_schedule:
@@ -33,10 +48,17 @@ class Scheduler:
 
         return next_machines
 
-    def scheduling(self):        
+    def scheduling(self):            
+        '''
+        Flags machines to receive maintenance when maintenance resources are 
+        available.
+        '''
+        from .System import System
+
         while True:
             yield self.env.timeout(1)
 
+            # get list of machines awaiting maintenance
             queue = []
             under_repair = 0
             for machine in self.system.machines:

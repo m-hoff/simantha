@@ -1,5 +1,6 @@
 from .System import *
 from .Machine import *
+from .Scheduler import *
 
 __all__ = ['System', 'Scheduler', 'Machine']
 

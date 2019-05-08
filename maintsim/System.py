@@ -30,10 +30,11 @@ class System:
                  maintenance_capacity=None,
                  maintenance_costs=None, # dict of cost by job type
 
+                 scheduler=None,
                  scheduler_class=None, # maintenance scheduling object
                  scheduling='fifo',
                  
-                 #initiate={}, # initiate system state variables
+                 allow_new_maintenance=True, # allow creation of new maintenance jobs
 
                  debug=False):
 
@@ -115,10 +116,17 @@ class System:
         #self.initiate = initiate
         self.debug = debug
 
-        if scheduler_class:
-            self.scheduler_class = scheduler_class
+        if scheduler:
+            self.scheduler = scheduler
         else:
-            self.scheduler_class = Scheduler
+            self.scheduler = Scheduler()
+
+        # if scheduler_class:
+        #     self.scheduler_class = scheduler_class
+        # else:
+        #     self.scheduler_class = Scheduler
+
+        self.allow_new_maintenance = allow_new_maintenance
 
         self.initialize() # initialize system objects        
 
@@ -162,23 +170,16 @@ class System:
 
             # machine objects
             process_time = self.process_times[m]
-            #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
-            #                          planned_failures_m, self, self.repairman)]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
                               self.failure_mode, self.failure_params[m], 
-                              self.initial_health[m], self)]
+                              self.initial_health[m], self, self.allow_new_maintenance)]
 
             if self.initial_remaining_process:
-                self.machines[m].remaining_process_time = self.initial_remaining_process[m]
-            # if 'remaining process time' in self.initiate.keys():
-            #     self.machines[m] = self.initiate['remaining process time'][m]
+                self.machines[m].remaining_process_time = self.initial_remaining_process[m]            
 
-        self.scheduler = self.scheduler_class(self, self.env)
-
-        # if self.scheduler: # custom or existing scheduler
-        #     self.scheduler.__init__(self, self.env)
-        # else: # default FIFO scheduler
-        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
+        # initialize scheduler object
+        #self.scheduler = self.scheduler_class(self, self.env)
+        self.scheduler.initialize(self, self.env)
 
         # initialize system data collection
         state_cols = ['time']     # system state data
