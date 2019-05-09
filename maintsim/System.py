@@ -296,27 +296,28 @@ class System:
             self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
         
             if objective == 'production':
-                production = [self.machines[-1].parts_made]
+                production = self.machines[-1].parts_made
                 obj.append(production)
-                units = 'units'
             elif objective == 'ppl':
                 ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
                 obj.append(ppl)
-                units = 'units lost production'
             elif objective == 'availability':
                 functional = ['M{} functional'.format(m) for m in range(self.M)]
                 functional = self.machine_data[self.machine_data['time'] >= 0][functional]
                 avail = 100*functional.sum().sum() / (self.M * self.sim_time)
                 obj.append(avail)
-                units = '% availability'
 
         stop_time = time.time()
         total_time = stop_time - start_time
         
         if verbose:
+            units = {'production': 'units',
+                     'ppl': 'units lost production',
+                     'availability': '% availability'}
+                     
             print('{} replications finished in {:.2f}s, {:.2f}s/rep'
                   .format(replications, total_time, total_time/replications))
-            print('Average objective: {:.2f} {}'.format(np.mean(obj), units))
+            print('Average objective: {:.2f} {}'.format(np.mean(obj), units[objective]))
         
         return obj    
 

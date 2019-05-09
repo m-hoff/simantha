@@ -11,7 +11,8 @@ class Scheduler:
     '''
     def __init__(self,
                  system=None,
-                 env=None):
+                 env=None,
+                 **kwds):
         
         # self.system = system
 
@@ -61,7 +62,7 @@ class Scheduler:
             # get list of machines awaiting maintenance
             queue = []
             under_repair = 0
-            for machine in self.system.machines:
+            for machine in self.system.machines:                
                 if machine.request_maintenance:
                     queue.append(machine)
                 if machine.under_repair:
@@ -70,6 +71,7 @@ class Scheduler:
             #print(self.env.now, ['M{}'.format(mach.m) for mach in queue])
             # scan queue if maintenance resources are available
             if self.system.available_maintenance:
+                #print('Machines in queue: {}, resources avail: {}'.format(len(queue), self.system.available_maintenance))
                 #print('scanning queue at t={}'.format(self.env.now))
                 if len(queue) == 0:
                     pass
@@ -77,7 +79,7 @@ class Scheduler:
                     #print('M{} alone in queue'.format(queue[0].m))
                     for machine in queue:
                         machine.assigned_maintenance = True
-                else: # len(queue) > capacity
+                else: # len(queue) > capacity                    
                     # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
                         machine.assigned_maintenance = True                
