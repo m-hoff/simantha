@@ -33,7 +33,7 @@ class Machine:
             self.degradation = failure_params
         else: # TTF distribution
             self.ttf_dist = failure_params
-        
+
         # determine maintenance policy for machine
         self.maintenance_policy = self.system.maintenance_policy
         maintenance_parameters = self.system.maintenance_params
@@ -60,16 +60,19 @@ class Machine:
         self.last_repair_time = None
         self.failed = False
         self.down = False
+        self.time_entered_queue = 99999
         
         # set maintenance request state based on initial health
         if ((self.maintenance_policy == 'CBM') 
             and (self.CBM_threshold <= self.health < 10)):
             self.request_maintenance = True
             self.repair_type = 'CBM'
+            self.time_entered_queue = self.env.now
         elif self.health == 10:
             self.request_maintenance = True
             self.repair_type = 'CM'
             self.failed = True
+            self.time_entered_queue = self.env.now
         else:
             self.request_maintenance = False
             self.repair_type = None
@@ -108,7 +111,8 @@ class Machine:
         while True:
             try:
                 if (self.m == 1):
-                    print('t={}'.format(self.env.now), self.request_maintenance)
+                    pass
+                    #print('t={}'.format(self.env.now), self.request_maintenance)
                     #print('{}'.format(self.env.now),
                     #      self.system.repairman.get_queue, 
                     #      self.system.repairman.users,
@@ -218,6 +222,7 @@ class Machine:
             # break loop once scheduled for maintenance
             self.assigned_maintenance = False
             self.request_maintenance = False
+            #print('M{} begin maintenance at t={}'.format(self.m, self.env.now))
             self.under_repair = True
             self.failing.interrupt() # stop degradation during maintenance                
 
@@ -317,6 +322,7 @@ class Machine:
             self.failed = False
             self.down = False
             self.under_repair = False
+            self.time_entered_queue = 99999
             #self.request_maintenance = False
 
             # record restored health
@@ -406,7 +412,7 @@ class Machine:
                             self.request_maintenance = True
                         
                         if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
-                            self.time_entered_queue = self.env.now                        
+                            self.time_entered_queue = min([self.time_entered_queue, self.env.now])
                         #self.system.repairman.release(self.maintenance_request)
                         # TODO: scheduler should assign maintenance here
                         #self.assigned_maintenance = True
@@ -416,13 +422,14 @@ class Machine:
                     elif ((self.maintenance_policy == 'CBM') 
                           and (self.health >= self.CBM_threshold) 
                           and (not self.failed)
-                          and (self.allow_new_maintenance)):
+                          and (self.allow_new_maintenance)
+                          and (not self.request_maintenance)):
                         # CBM threshold reached, request repair, assumes each degradation state is visited
                         self.request_maintenance = True
                         #self.request_preventive_repair = True
                         self.repair_type = 'CBM'
-                        self.time_entered_queue = self.env.now
-
+                        self.time_entered_queue = min([self.time_entered_queue, self.env.now])
+                        
                         self.write_failure()                        
 
             except simpy.Interrupt:
