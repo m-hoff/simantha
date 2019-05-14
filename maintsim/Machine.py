@@ -133,38 +133,38 @@ class Machine:
             try:
                 self.idle_start = self.idle_stop = self.env.now
                 self.idle = True
-                
+
                 # get part from input buffer
                 if self.m > 0:
                     yield self.in_buff.get(1)                    
                     self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m-1)] = self.in_buff.level
-                    
+
                     self.idle_stop = self.env.now
-                    
+
                 self.has_part = True
                 self.idle = False
-                
+
                 #self.system.state_data.loc[self.env.now, self.name+' has part'] = 1
-                 
+
                 #self.remaining_process_time = self.process_time
-                    
+
                 # check if machine was starved
                 if self.idle_stop - self.idle_start > 0:
-                    #if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, self.idle_start, self.idle_stop))                  
+                    #if self.m == 1: print('M{} starved from t={} to t={}'.format(self.m, self.idle_start, self.idle_stop))
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
-                    
+
                     if self.env.now > self.system.warmup_time:       
                         self.total_downtime += (self.idle_stop - self.idle_start)
-                
+
                 # process part
                 while self.remaining_process_time:
                     self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
-                    self.system.machine_data.loc[self.env.now, self.name+' forced idle'] = 0 
+                    self.system.machine_data.loc[self.env.now, self.name+' forced idle'] = 0
                     yield self.env.timeout(1)
                     
                     self.remaining_process_time -= 1
-                                            
+
                 # put finished part in output buffer
                 self.idle_start = self.env.now
                 self.idle = True
@@ -243,7 +243,7 @@ class Machine:
                     #print('M{} yielded CM request at t={}'.format(self.m, self.env.now))
 
             self.has_part = False
-            # check if part was finished before failure occured                
+            # check if part was finished before failure occured
             if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
                 # I think this works. Might need further valifation
                 if self.m == self.system.M-1:
@@ -257,13 +257,13 @@ class Machine:
                     
                     if self.env.now > self.system.warmup_time:
                         self.parts_made += 1
-                    
+
                 self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
-                    
+
                 self.has_part = False
-                
+
             maintenance_start = self.env.now
-            
+
             # write failure data
             if self.last_repair_time:
                 TTF = self.env.now - self.last_repair_time
@@ -290,33 +290,15 @@ class Machine:
             for _ in range(self.time_to_repair):
                 yield self.env.timeout(1)
                 # record queue data
-                self.system.queue_data.loc[self.env.now, 'contents'] = len(self.system.repairman.queue)
+                current_queue = ['M{}'.format(machine.m) for machine in self.system.machines if machine.request_maintenance]
+                self.system.queue_data.loc[self.env.now, 'level'] = len(current_queue)
+                self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
 
             # repairman is released
             #self.system.repairman.release(self.maintenance_request)
             self.maintenance_request = None
-            #print('M{} repaired at t={}'.format(self.m, self.env.now))
+            #print('M{} repaired at t={}'.format(self.m, self.env.now))                                                   
 
-            # update other machine priorities
-            # if self.system.scheduling is not 'fifo':
-            #     max_priority = -1
-            #     next_machine = None
-            #     for machine in self.system.machines:
-            #         if machine.maintenance_request: # machine has a request
-            #             #print('Updating M{} priority at t={}'.format(machine.m, machine.env.now))
-            #             #machine.maintenance_request.cancel()
-            #             priority = machine.get_priority()
-            #             print('t={}, M{} priority={}'.format(self.env.now, machine.m, priority))
-            #             if priority > max_priority:
-            #                 max_priority = priority
-            #                 next_machine = machine
-            #             #machine.maintenance_request = machine.system.repairman.request(priority=priority)
-            #             #yield machine.maintenance_request
-            #             #print('new request yielded for M{} at t={}'.format(machine.m, machine.env.now))
-            #     if next_machine:
-            #         # start maintenance on next machine
-            #         next_machine.process.interrupt()                                                    
-            
             self.health = 0
             self.last_repair_time = self.env.now
             self.failed = False

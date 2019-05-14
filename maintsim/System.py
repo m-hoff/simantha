@@ -202,7 +202,7 @@ class System:
         self.state_data = pd.DataFrame(columns=state_cols)
         self.production_data = pd.DataFrame(columns=prod_cols)
         self.machine_data = pd.DataFrame(columns=machine_cols)
-        self.queue_data = pd.DataFrame(columns=['time', 'contents'])
+        self.queue_data = pd.DataFrame(columns=['time', 'level', 'contents'])
         self.maintenance_data = pd.DataFrame(columns=['time',
                                                       'machine',
                                                       'type',
@@ -272,6 +272,7 @@ class System:
             self.machine_data['M{} health'.format(m)].astype(int)
 
         #  queue data
+        self.queue_data.ffill(inplace=True)
         self.queue_data.fillna(0, inplace=True)
 
         #  maintenance data

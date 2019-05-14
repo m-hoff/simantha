@@ -34,8 +34,8 @@ class Scheduler:
 
     def choose_next(self, queue):
         '''
-        Choose the next machines on which to perform maintenance. Returns the 
-        the chosen machine objects which are then flagged by the scheduling 
+        Choose the next machines on which to perform maintenance. Returns the
+        the chosen machine objects which are then flagged by the scheduling
         method.
         '''
         # MCTS should be solved here
@@ -49,12 +49,12 @@ class Scheduler:
 
         return next_machines # returns machine that will begin maintenance
 
-    def scheduling(self):            
+    def scheduling(self):
         '''
-        Flags machines to receive maintenance when maintenance resources are 
+        Flags machines to receive maintenance when maintenance resources are
         available.
         '''
-        from .System import System
+        #from .System import System
 
         while True:
             yield self.env.timeout(1)
@@ -62,7 +62,7 @@ class Scheduler:
             # get list of machines awaiting maintenance
             queue = []
             under_repair = 0
-            for machine in self.system.machines:                
+            for machine in self.system.machines:
                 if machine.request_maintenance:
                     queue.append(machine)
                 if machine.under_repair:
@@ -79,7 +79,7 @@ class Scheduler:
                     #print('M{} alone in queue'.format(queue[0].m))
                     for machine in queue:
                         machine.assigned_maintenance = True
-                else: # len(queue) > capacity                    
+                else: # len(queue) > capacity
                     # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
                         machine.assigned_maintenance = True                
