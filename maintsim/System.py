@@ -273,7 +273,8 @@ class System:
 
         #  queue data
         self.queue_data.ffill(inplace=True)
-        self.queue_data.fillna(0, inplace=True)
+        self.queue_data['contents'].fillna(str([]), inplace=True)
+        self.queue_data['level'].fillna(0, inplace=True)
 
         #  maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)
