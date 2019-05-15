@@ -2,10 +2,12 @@ import simpy
 
 import time
 import random
+import numpy as np
 import pandas as pd
 from graphviz import Digraph
 
 from .Machine import Machine
+from .Scheduler import Scheduler
 
 class System:
     '''
@@ -13,6 +15,7 @@ class System:
     '''
     def __init__(self,
                  process_times,
+                 initial_remaining_process=None,
                  interarrival_time=1, # int
                  buffer_sizes=1, # list or int
                  initial_buffer=0,
@@ -28,6 +31,12 @@ class System:
                  maintenance_capacity=None,
                  maintenance_costs=None, # dict of cost by job type
 
+                 scheduler=None,
+                 scheduler_class=None, # maintenance scheduling object
+                 scheduling='fifo',
+                 
+                 allow_new_maintenance=True, # allow creation of new maintenance jobs
+
                  debug=False):
 
         # inferred system characteristics
@@ -37,6 +46,7 @@ class System:
 
         # specified system characteristics
         self.process_times = process_times
+        self.initial_remaining_process = initial_remaining_process
         self.interarrival_time = interarrival_time
         if type(buffer_sizes) == int:
             self.buffer_sizes = [buffer_sizes]*(self.M-1)
@@ -47,6 +57,11 @@ class System:
             self.initial_buffer = [initial_buffer]*(self.M-1)
         else:
             self.initial_buffer = initial_buffer
+
+        # if 'buffer levels' in initiate.keys():
+        #     self.initial_buffer = initiate['buffer levels']
+        # else:
+        #     self.initial_buffer = [0] * (self.M-1)
 
         self.failure_mode = failure_mode
         self.failure_params = failure_params
@@ -74,6 +89,11 @@ class System:
         else:
             self.initial_health = [0]*self.M
 
+        # if 'machine health' in initiate.keys():
+        #     self.initial_health = initiate['machine health']
+        # else:
+        #     self.initial_health = [0] * self.M
+
         self.repair_params = repair_params
 
         #self.failures = failures
@@ -92,9 +112,30 @@ class System:
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
 
+        #self.scheduling = scheduling
+
+        #self.initiate = initiate
         self.debug = debug
 
-        self.initialize() # initialize system objects
+        if scheduler:
+            self.scheduler = scheduler
+        else:
+            self.scheduler = Scheduler()
+
+        # if scheduler_class:
+        #     self.scheduler_class = scheduler_class
+        # else:
+        #     self.scheduler_class = Scheduler
+
+        self.allow_new_maintenance = allow_new_maintenance
+
+        self.initialize() # initialize system objects        
+
+        # if scheduler: # custom scheduler
+        #     self.scheduler = scheduler
+        # else: # default FIFO scheduler
+        #     print('Creating FIFO scheduler')
+        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
 
         # simulation parameters
         self.warmup_time = 0
@@ -111,6 +152,7 @@ class System:
 
         # create repairman object
         self.repairman = simpy.PriorityResource(self.env, capacity=self.maintenance_capacity)
+        self.available_maintenance = self.maintenance_capacity
 
         # create objects for each machine
         self.buffers = []
@@ -129,11 +171,16 @@ class System:
 
             # machine objects
             process_time = self.process_times[m]
-            #self.machines += [Machine(self.env, m, process_time, self.degradation[m],
-            #                          planned_failures_m, self, self.repairman)]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
                               self.failure_mode, self.failure_params[m], 
-                              self.initial_health[m], self)]
+                              self.initial_health[m], self, self.allow_new_maintenance)]
+
+            if self.initial_remaining_process:
+                self.machines[m].remaining_process_time = self.initial_remaining_process[m]            
+
+        # initialize scheduler object
+        #self.scheduler = self.scheduler_class(self, self.env)
+        self.scheduler.initialize(self, self.env)
 
         # initialize system data collection
         state_cols = ['time']     # system state data
@@ -155,7 +202,7 @@ class System:
         self.state_data = pd.DataFrame(columns=state_cols)
         self.production_data = pd.DataFrame(columns=prod_cols)
         self.machine_data = pd.DataFrame(columns=machine_cols)
-        self.queue_data = pd.DataFrame(columns=['time', 'contents'])
+        self.queue_data = pd.DataFrame(columns=['time', 'level', 'contents'])
         self.maintenance_data = pd.DataFrame(columns=['time',
                                                       'machine',
                                                       'type',
@@ -218,12 +265,16 @@ class System:
             self.machine_data[col1] = self.machine_data[col1].fillna(1)
 
             col2 = 'M{} forced idle'.format(m)
-            self.machine_data[col2] = self.machine_data[col2].fillna(0)
+            self.machine_data[col2] = self.machine_data[col2].fillna(1)
+
+            self.machines[m].total_downtime = sum(self.machine_data[col2])
 
             self.machine_data['M{} health'.format(m)].astype(int)
 
         #  queue data
-        self.queue_data.fillna(0, inplace=True)
+        self.queue_data.ffill(inplace=True)
+        self.queue_data['contents'].fillna(str([]), inplace=True)
+        self.queue_data['level'].fillna(0, inplace=True)
 
         #  maintenance data
         self.maintenance_data.dropna(subset=['machine'], inplace=True)
@@ -239,18 +290,38 @@ class System:
 
             print('  System availability: {:.2f}%\n'.format(avail*100))
 
-    def iterate_simulation(self, replications, warmup_time, sim_time, 
-                           objective, verbose=True):
+    def iterate_simulation(self, replications, warmup_time=0, sim_time=100, 
+                           objective='production', verbose=True):
         start_time = time.time()                           
         obj = []
         for _ in range(replications):
             self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
         
             if objective == 'production':
-                obj += [self.machines[-1].parts_made]
-            #TODO: objectives - PMOW, availability, cost
-        print('{} replications finished in {:.2f}s'.format(replications, time.time()-start_time))                
-        return obj
+                production = self.machines[-1].parts_made
+                obj.append(production)
+            elif objective == 'ppl':
+                ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
+                obj.append(ppl)
+            elif objective == 'availability':
+                functional = ['M{} functional'.format(m) for m in range(self.M)]
+                functional = self.machine_data[self.machine_data['time'] >= 0][functional]
+                avail = 100*functional.sum().sum() / (self.M * self.sim_time)
+                obj.append(avail)
+
+        stop_time = time.time()
+        total_time = stop_time - start_time
+        
+        if verbose:
+            units = {'production': 'units',
+                     'ppl': 'units lost production',
+                     'availability': '% availability'}
+                     
+            print('{} replications finished in {:.2f}s, {:.2f}s/rep'
+                  .format(replications, total_time, total_time/replications))
+            print('Average objective: {:.2f} {}'.format(np.mean(obj), units[objective]))
+        
+        return obj    
 
     def draw(self):
         '''
