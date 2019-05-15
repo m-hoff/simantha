@@ -1,6 +1,9 @@
 **/.idea/
 **/__pycache__/
 **/.ipynb_checkpoints
+*.pyc
+
+*.vscode/
 
 mow_demo2.ipynb
 

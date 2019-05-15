@@ -2,7 +2,20 @@
 
 `maintsim` can be used to model a discrete manufacturing system where components degrade over time and recieve maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
 
+## Installing maintsim
+
+Currently, the easiest way to install maintsim is to clone the repository using `git clone https://github.com/m-hoff/maintsim.git`. 
+
 ## Using this package
+
+### Requirements
+
+maintsim relies on the following packages in addition to Python 3.7:
+
+- [SimPy](https://simpy.readthedocs.io/en/latest/) version 3.0.11
+- [pandas](https://pandas.pydata.org/) version >= 0.23.4
+- [SciPy](https://www.scipy.org) version >= 1.1.0 (if specifying random repair times)
+- [Graphviz](https://graphviz.readthedocs.io/en/stable/) version 0.10.1 (untested)
 
 ### Setting up a manufacturing system
 
@@ -24,6 +37,7 @@ The workflow begins by creating a `System` object that is defined by the followi
   - `'CM'` - "corrective maintenance", the default policy, machines will only be repaired upon complete failure, as determined by the mode of degradation.
   - `'CBM'` - "condition-based maintenance", preventive maintenance is performed once a machine's condition reached a prescribed threshold.
 - `maintenance_params` - the parameters that define the specified maintenance policy. For `CBM`, a list of thresholds at which to schedule maintenance.
+  - Currently each machine has 11 health states, with 0 being perfect health and 10 being the failed state. The maintenance threshold should be in this range.
 - `repair_params` - a dictionary of `scipy.stats` frozen discrete distributions of time to repair based on repair type.
   - For example, `repair_params = {'CM': stats.randint(10, 20), 'CBM': stats.randint(20, 40)}`.
 - `maintenance_capacity` - the maximum number of maintenance jobs that can be executed simultaneously. Currently if the number of simultaneously scheduled maintenance jobs exceeds the capacity they will be handled in a first in, first out (FIFO) manner.
@@ -112,12 +126,34 @@ A system can be simulated several times using the `System.iterate_simulation` me
 
 - The method `System.draw()` will display the system layout using the graphviz pacakge (only tested in jupyter notebooks).
 
----
+## A simple example
 
-### Planned features
+Here is a minimum example for implmenting a CBM policy:
+
+```python
+>>> import maintsim
+>>> from scipy import stats
+>>> 
+>>> system = maintsim.System(process_times=[3, 5, 4],
+...                          buffer_sizes=5,
+...                          failure_mode='degradation',
+...                          failure_params=[0.25, 0.1, 0.2],
+...                          maintenance_policy='CBM',
+...                          maintenance_params={'CBM threshold': [8, 6, 7]},
+...                          repair_params={'CM': stats.randint(20,30),
+...                                         'CBM': stats.randint(10,20)},
+...                          maintenance_capacity=1)
+>>> system.simulate(warmup_time=100, sim_time=500)
+Simulation complete in 0.89 s
+ 
+  Units produced:      31
+  System availability: 68.93%
+```
+
+## Planned features
 
 Key planned features include
 
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
-- Non-homogeneous degradation modes
+- Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix
 - Exporting system model for reuse
