@@ -31,6 +31,7 @@ class Machine:
         self.failure_mode = failure_mode
         if self.failure_mode == 'degradation': # Markov degradation
             self.degradation = failure_params
+            self.failed_state = len(self.degradation) - 1
         else: # TTF distribution
             self.ttf_dist = failure_params
 
@@ -219,20 +220,23 @@ class Machine:
                 # wait to be scheduled for maintenance
                 yield self.env.timeout(1)
 
+            
             # break loop once scheduled for maintenance
             self.assigned_maintenance = False
             self.request_maintenance = False
-            #print('M{} begin maintenance at t={}'.format(self.m, self.env.now))
             self.under_repair = True
+            print(f'Maintenance started at t={self.env.now}')
             self.failing.interrupt() # stop degradation during maintenance                
-
+            print('Interrupted degradation')
             self.system.available_maintenance -= 1 # occupy one maintenance resource
 
             downtime_start = self.env.now
             if self.failed:
                 #self.maintenance.interrupt()
                 try:
-                    self.maintenance_request.cancel() # cancel preventive request
+                    print('here1')
+                    #self.maintenance_request.cancel() # cancel preventive request
+                    print('here2')
                 except:
                     pass
 
@@ -264,24 +268,6 @@ class Machine:
 
             maintenance_start = self.env.now
 
-            # write failure data
-            if self.last_repair_time:
-                TTF = self.env.now - self.last_repair_time
-            else:
-                TTF = 'NA'
-            
-            if not self.failed:
-                fail_time = self.env.now - self.system.warmup_time
-
-            # new_failure = pd.DataFrame({'time':[fail_time],
-            #                             'machine':[self.m],
-            #                             'type':[self.repair_type],
-            #                             'activity':['failure'],
-            #                             'duration':[TTF]})
-            # self.system.maintenance_data = self.system.maintenance_data.append(new_failure, ignore_index=True) 
-
-            #TODO: get priority
-            
             # generate TTR based on repair type
             if self.repair_type is not 'planned':
                 self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
@@ -372,51 +358,55 @@ class Machine:
         while True:
             try:
                 #print('degradation resumed at t={}'.format(self.env.now))
-                while random() > self.degradation:
-                    # do not degrade
-                    yield self.env.timeout(1)
+                # while random() > self.degradation:
+                #     # do not degrade
+                #     yield self.env.timeout(1)
                 
-                # degrade by one unit once loop breaks
+                # TODO: check placement of this timeout
                 yield self.env.timeout(1)
+
+                # sample next health state based on transition matrix
+                states = np.arange(0, self.failed_state+1)
+                self.health = np.random.choice(states, p=self.degradation[self.health])                            
                 
-                if self.health < 10: # machine is NOT failed
-                    self.health += 1 # degrade by one unit
+                # if self.health < 10: # machine is NOT failed
+                #     self.health += 1 # degrade by one unit
 
-                    # record current machine health
-                    self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
+                # record current machine health
+                self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
-                    if (self.health == 10): # machine fails
-                        #print('M{} failed at t={}'.format(self.m, self.env.now))
-                        self.failed = True
-                        self.repair_type = 'CM'
-                        
-                        if self.allow_new_maintenance:
-                            self.request_maintenance = True
-                        
-                        if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
-                            self.time_entered_queue = min([self.time_entered_queue, self.env.now])
-                        #self.system.repairman.release(self.maintenance_request)
-                        # TODO: scheduler should assign maintenance here
-                        #self.assigned_maintenance = True
-                        self.process.interrupt()
-
-                    # TODO: validate elif here  
-                    elif ((self.maintenance_policy == 'CBM') 
-                          and (self.health >= self.CBM_threshold) 
-                          and (not self.failed)
-                          and (self.allow_new_maintenance)
-                          and (not self.request_maintenance)):
-                        # CBM threshold reached, request repair, assumes each degradation state is visited
+                if (self.health == self.failed_state): # machine fails
+                    #print('M{} failed at t={}'.format(self.m, self.env.now))
+                    self.failed = True
+                    self.repair_type = 'CM'
+                    
+                    if self.allow_new_maintenance:
                         self.request_maintenance = True
-                        #self.request_preventive_repair = True
-                        self.repair_type = 'CBM'
+                    
+                    if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
                         self.time_entered_queue = min([self.time_entered_queue, self.env.now])
-                        
-                        self.write_failure()                        
+                    #self.assigned_maintenance = True
+                    print(f'Interruping processing at t={self.env.now}')
+                    self.process.interrupt()
+
+                # TODO: validate elif here  
+                elif ((self.maintenance_policy == 'CBM') 
+                        and (self.health >= self.CBM_threshold) 
+                        and (not self.failed)
+                        and (self.allow_new_maintenance)
+                        and (not self.request_maintenance)):
+                    # CBM threshold reached, request repair, assumes each degradation state is visited
+                    self.request_maintenance = True
+                    #self.request_preventive_repair = True
+                    self.repair_type = 'CBM'
+                    self.time_entered_queue = min([self.time_entered_queue, self.env.now])
+                    
+                    self.write_failure()                        
 
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
                 while self.under_repair:
+                    print(f'under repair at t={self.env.now}')
                     yield self.env.timeout(1)
 
     def scheduled_failures(self):
