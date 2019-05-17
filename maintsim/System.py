@@ -67,6 +67,42 @@ class System:
         self.failure_params = failure_params
         if self.failure_mode:
             if self.failure_mode == 'degradation': # Markov degradation
+                # TODO: finish flexible degradation
+                if type(failure_params['degradation_rate']) == list:
+                    # rate specified for each machine
+                    self.degradation_rate = failure_params['degradation_rate']
+                else:
+                    # same rate for each machine
+                    self.degradation_rate = failure_params['degradation_rate']*self.M
+
+                if 'failed_state' in failure_params.keys():
+                    # maximum health state specified, default upper bidiagonal matrix
+                    if type(failure_params['failed_state']) == list:
+                        # each machine has a failed state
+                        self.degradation_transition = []
+                        for i in range(self.M):
+                            h_max = failure_params['failed_state'][i]
+                            rate = self.degradation_rate[i]
+                            mat = np.zeros((h_max+1, h_max+1))
+                            for j in range(h_max+1):
+                                if j < h_max:
+                                    mat[j][j] = rate
+                                    mat[j][j+1] = 1 - rate
+                                else:
+                                    mat[j][j] = 1
+                            self.degradation_transition.append(mat)
+
+                elif 'degradation_transition' in failure_params.keys():
+                    # complete transition matrix is specified
+                    if type(failure_params['degradation_transition']) == list:
+                        # each machine has its own degradation transition matrix
+                        self.degradation_transition = failure_params['degradation_transition']
+                    else:
+                        # one transition matrix for each machine
+                        self.degradation_transition = failure_params['degradation_transition']*self.M
+                
+
+
                 if type(failure_params) == float:
                     self.degradation = [failure_params]*self.M
                 elif type(failure_params) == dict:
@@ -75,6 +111,8 @@ class System:
                 else:
                     self.degradation = failure_params
                     self.failure_state = 10
+
+
             elif self.failure_mode == 'reliability': # TTF distribution
                 if len(failure_params) == 1:
                     self.reliability = [failure_params]*self.M
