@@ -228,6 +228,7 @@ class System:
 
         start_time = time.time()
         if seed:
+            np.random.seed(seed)
             random.seed(seed)
 
         self.initialize() # reinitialize system
