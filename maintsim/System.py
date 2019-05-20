@@ -32,8 +32,6 @@ class System:
                  maintenance_costs=None, # dict of cost by job type
 
                  scheduler=None,
-                 scheduler_class=None, # maintenance scheduling object
-                 scheduling='fifo',
                  
                  allow_new_maintenance=True, # allow creation of new maintenance jobs
 
@@ -106,14 +104,14 @@ class System:
                         self.degradation_transition.append(mat)
 
 
-                if type(failure_params) == float:
-                    self.degradation = [failure_params]*self.M
-                elif type(failure_params) == dict:
-                    self.degradation = failure_params['degradation rate']
-                    self.failure_state = failure_params['failed state']
-                else:
-                    self.degradation = failure_params
-                    self.failure_state = 10
+                # if type(failure_params) == float:
+                #     self.degradation = [failure_params]*self.M
+                # elif type(failure_params) == dict:
+                #     self.degradation = failure_params['degradation rate']
+                #     self.failure_state = failure_params['failed state']
+                # else:
+                #     self.degradation = failure_params
+                #     self.failure_state = 10
 
 
             elif self.failure_mode == 'reliability': # TTF distribution
@@ -165,13 +163,7 @@ class System:
 
         self.allow_new_maintenance = allow_new_maintenance
 
-        self.initialize() # initialize system objects        
-
-        # if scheduler: # custom scheduler
-        #     self.scheduler = scheduler
-        # else: # default FIFO scheduler
-        #     print('Creating FIFO scheduler')
-        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
+        self.initialize() # initialize system objects
 
         # simulation parameters
         self.warmup_time = 0
@@ -215,7 +207,6 @@ class System:
                 self.machines[m].remaining_process_time = self.initial_remaining_process[m]            
 
         # initialize scheduler object
-        #self.scheduler = self.scheduler_class(self, self.env)
         self.scheduler.initialize(self, self.env)
 
         # initialize system data collection

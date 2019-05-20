@@ -198,6 +198,7 @@ class Machine:
 
                 # write failure
                 self.write_failure()
+                #print(f'Processing interrupted at t={self.env.now}')
                 # if self.last_repair_time:
                 #     TTF = self.env.now - self.last_repair_time
                 # else:
@@ -219,26 +220,24 @@ class Machine:
             while not self.assigned_maintenance:
                 # wait to be scheduled for maintenance
                 yield self.env.timeout(1)
-
             
             # break loop once scheduled for maintenance
             self.assigned_maintenance = False
             self.request_maintenance = False
             self.under_repair = True
-            print(f'Maintenance started at t={self.env.now}')
-            self.failing.interrupt() # stop degradation during maintenance                
-            print('Interrupted degradation')
+            #print(f'Maintenance started at t={self.env.now}')
+            self.failing.interrupt() # stop degradation during maintenance
             self.system.available_maintenance -= 1 # occupy one maintenance resource
 
             downtime_start = self.env.now
-            if self.failed:
-                #self.maintenance.interrupt()
-                try:
-                    print('here1')
-                    #self.maintenance_request.cancel() # cancel preventive request
-                    print('here2')
-                except:
-                    pass
+            # if self.failed:
+            #     #self.maintenance.interrupt()
+            #     try:
+            #         print('here1')
+            #         #self.maintenance_request.cancel() # cancel preventive request
+            #         print('here2')
+            #     except:
+            #         pass
 
                     #fail_time = self.env.now - self.system.warmup_time
                     # create new corrective request (after stopping production)
@@ -271,7 +270,6 @@ class Machine:
             # generate TTR based on repair type
             if self.repair_type is not 'planned':
                 self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
-            
             # wait for repair to finish
             for _ in range(self.time_to_repair):
                 yield self.env.timeout(1)
@@ -296,8 +294,8 @@ class Machine:
             # record restored health
             self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
             
-            maintenance_stop = self.env.now
-            
+            maintenance_stop = self.env.now            
+
             self.system.machine_data.loc[maintenance_start:maintenance_stop-1, 'M{} functional'.format(self.m)] = 0
             
             # write repair data
@@ -375,7 +373,8 @@ class Machine:
                 # record current machine health
                 self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
                     
-                if (self.health == self.failed_state): # machine fails
+                if ((self.health == self.failed_state)
+                   and (not self.failed)): # machine fails
                     #print('M{} failed at t={}'.format(self.m, self.env.now))
                     self.failed = True
                     self.repair_type = 'CM'
@@ -386,7 +385,7 @@ class Machine:
                     if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
                         self.time_entered_queue = min([self.time_entered_queue, self.env.now])
                     #self.assigned_maintenance = True
-                    print(f'Interruping processing at t={self.env.now}')
+                    #print(f'Interrupting processing at t={self.env.now}')
                     self.process.interrupt()
 
                 # TODO: validate elif here  
@@ -406,7 +405,7 @@ class Machine:
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
                 while self.under_repair:
-                    print(f'under repair at t={self.env.now}')
+                    #print(f'under repair at t={self.env.now}')
                     yield self.env.timeout(1)
 
     def scheduled_failures(self):
@@ -455,7 +454,7 @@ class Machine:
         '''
         Update the maintenance priority for this machine.
         '''
-        print('updating M{} priority at t={}'.format(self.m, self.env.now))
+        #print('updating M{} priority at t={}'.format(self.m, self.env.now))
         if (self.maintenance_request) and (not self.under_repair):
             # delete request, update priority 
             self.maintenance_request.cancel()
