@@ -32,7 +32,7 @@ class Machine:
         if self.failure_mode == 'degradation': # Markov degradation
             self.degradation = failure_params
             self.failed_state = len(self.degradation) - 1
-        else: # TTF distribution
+        elif self.failure_mode == 'reliability': # TTF distribution
             self.ttf_dist = failure_params
 
         # determine maintenance policy for machine

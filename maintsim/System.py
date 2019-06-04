@@ -103,7 +103,6 @@ class System:
                                 mat[j][j] = 1
                         self.degradation_transition.append(mat)
 
-
                 # if type(failure_params) == float:
                 #     self.degradation = [failure_params]*self.M
                 # elif type(failure_params) == dict:
@@ -121,8 +120,8 @@ class System:
                     self.reliability = failure_params
 
         else: # no degradation
-            self.failure_mode = 'degradation'
-            self.failure_params = [0]*self.M
+            self.failure_mode = None
+            self.degradation_transition = [np.zeros((5,5))]*self.M
 
         if initial_health:
             self.initial_health = initial_health
