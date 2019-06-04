@@ -2,6 +2,8 @@ from .System import *
 from .Machine import *
 from .Scheduler import *
 
+__name__ = 'maintsim'
+
 __all__ = ['System', 'Scheduler', 'Machine']
 
 __title__ = 'maintsim'
