@@ -32,8 +32,6 @@ class System:
                  maintenance_costs=None, # dict of cost by job type
 
                  scheduler=None,
-                 scheduler_class=None, # maintenance scheduling object
-                 scheduling='fifo',
                  
                  allow_new_maintenance=True, # allow creation of new maintenance jobs
 
@@ -66,23 +64,64 @@ class System:
         self.failure_mode = failure_mode
         self.failure_params = failure_params
         if self.failure_mode:
-            if self.failure_mode == 'degradation': # Markov degradation
-                if type(failure_params) == float:
-                    self.degradation = [failure_params]*self.M
-                elif type(failure_params) == dict:
-                    self.degradation = failure_params['degradation_rate']
-                    self.failure_state = failure_params['failure_state']
+            if self.failure_mode == 'degradation':
+                # Markov degradation
+                # TODO: finish flexible degradation
+                if 'degradation transition' in failure_params.keys():
+                    # complete transition matrix is specified
+                    if type(failure_params['degradation transition']) == list:
+                        # each machine has its own degradation transition matrix
+                        self.degradation_transition = failure_params['degradation transition']
+                    else:
+                        # same transition matrix for each machine
+                        self.degradation_transition = failure_params['degradation transition']*self.M
+
                 else:
-                    self.degradation = failure_params
-                    self.failure_state = 10
+                    if type(failure_params['degradation rate']) == list:
+                        # rate specified for each machine
+                        self.degradation_rate = failure_params['degradation rate']
+                    else:
+                        # same rate for each machine
+                        self.degradation_rate = [failure_params['degradation rate']]*self.M
+
+                    if 'failed state' not in failure_params.keys():
+                        # default h_max
+                        h_max = [10]*self.M
+                    elif type(failure_params['failed state']) == int:
+                        # single h_max for all machines
+                        h_max = [failure_params['failed state']]*self.M
+                                        
+                    self.degradation_transition = []
+                    for i in range(self.M):
+                        rate = self.degradation_rate[i]
+                        mat = np.zeros((h_max[i]+1, h_max[i]+1))
+                        for j in range(h_max[i]+1):
+                            if j < h_max[i]:
+                                mat[j][j] = 1 - rate
+                                mat[j][j+1] = rate
+                            else:
+                                mat[j][j] = 1
+                        self.degradation_transition.append(mat)
+
+                # if type(failure_params) == float:
+                #     self.degradation = [failure_params]*self.M
+                # elif type(failure_params) == dict:
+                #     self.degradation = failure_params['degradation rate']
+                #     self.failure_state = failure_params['failed state']
+                # else:
+                #     self.degradation = failure_params
+                #     self.failure_state = 10
+
+
             elif self.failure_mode == 'reliability': # TTF distribution
                 if len(failure_params) == 1:
                     self.reliability = [failure_params]*self.M
                 else:
                     self.reliability = failure_params
+
         else: # no degradation
-            self.failure_mode = 'degradation'
-            self.failure_params = [0]*self.M
+            self.failure_mode = None
+            self.degradation_transition = [np.zeros((5,5))]*self.M
 
         if initial_health:
             self.initial_health = initial_health
@@ -114,7 +153,6 @@ class System:
 
         #self.scheduling = scheduling
 
-        #self.initiate = initiate
         self.debug = debug
 
         if scheduler:
@@ -122,20 +160,9 @@ class System:
         else:
             self.scheduler = Scheduler()
 
-        # if scheduler_class:
-        #     self.scheduler_class = scheduler_class
-        # else:
-        #     self.scheduler_class = Scheduler
-
         self.allow_new_maintenance = allow_new_maintenance
 
-        self.initialize() # initialize system objects        
-
-        # if scheduler: # custom scheduler
-        #     self.scheduler = scheduler
-        # else: # default FIFO scheduler
-        #     print('Creating FIFO scheduler')
-        #     self.scheduler = Scheduler(self, self.env, policy='fifo')
+        self.initialize() # initialize system objects
 
         # simulation parameters
         self.warmup_time = 0
@@ -172,14 +199,13 @@ class System:
             # machine objects
             process_time = self.process_times[m]
             self.machines += [Machine(self.env, m, process_time, planned_failures_m,
-                              self.failure_mode, self.failure_params[m], 
+                              self.failure_mode, self.degradation_transition[m], 
                               self.initial_health[m], self, self.allow_new_maintenance)]
 
             if self.initial_remaining_process:
                 self.machines[m].remaining_process_time = self.initial_remaining_process[m]            
 
         # initialize scheduler object
-        #self.scheduler = self.scheduler_class(self, self.env)
         self.scheduler.initialize(self, self.env)
 
         # initialize system data collection
@@ -230,6 +256,7 @@ class System:
         if seed:
             np.random.seed(seed)
             random.seed(seed)
+            np.random.seed(seed)
 
         self.initialize() # reinitialize system
 

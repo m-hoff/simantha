@@ -1,6 +1,10 @@
 # maintsim
 
-`maintsim` can be used to model a discrete manufacturing system where components degrade over time and recieve maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
+`maintsim` can be used to model a discrete manufacturing system where components degrade over time and receive maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
+
+## Installing maintsim
+
+`pip install maintsim` 
 
 ## Installing maintsim
 
@@ -10,7 +14,7 @@ Currently, the easiest way to install maintsim is to clone the repository using 
 
 ### Requirements
 
-maintsim relies on the following packages in addition to Python 3.7:
+maintsim relies on the following packages in addition to Python 3.6+:
 
 - [SimPy](https://simpy.readthedocs.io/en/latest/) version 3.0.11
 - [pandas](https://pandas.pydata.org/) version >= 0.23.4
@@ -28,9 +32,17 @@ The workflow begins by creating a `System` object that is defined by the followi
 
 #### Failure parameters
 - `failure_mode` - currently either `'degradation'` or `None`. Each machine is subject to the same mode of degradation. By default machines do not degrade.
-  - `'degradation'` - machine degradation occurs according to a discrete-state Markovian process.
-- `failure_params` - for `'degradation'`, a list of transition probabilities between degradation states.
-- `planned_failures` - a list of planned failures to occur during the simulation time. Each of the form `(location, time, duration)`. Planned failures do not adhere to maintenance capacity constraints and have not been thoroughly tested in tandom with random failures.
+  - `'degradation'` - machine degradation occurs according to a discrete-state Markovian process. Currently only Markovian degradation is supported. Requires specification of `failure_params`, described in the following subsection.
+- `planned_failures` - a list of planned failures to occur during the simulation time. Each of the form `(location, time, duration)`. Planned failures do not adhere to maintenance capacity constraints and have not been thoroughly tested in tandem with random failures.
+
+##### Markovian degradation parameters
+
+There are several options for specifying the mode of degradation using the `failure_params` argument which should be passed as a dictionary.
+- Constant degradation rate - passed as the value of the `degradation rate` key either as a single float or list of floats for each machine. The value is the probability of degrading by one unit at each time step and so should be between 0 and 1. Creates an upper bidiangonal degradation transition matrix.
+- Failed state - if the degradation rate is specified, the maximum health (failed) state for each machine can be passed as the value of the `failed state` key. The default failed state is 10. 
+- Complete degradation transition matrix - can be specified as a single `numpy` array (in which case each machine will be subject to the same degradation profile) or a list of arrays for each machine as the value of the `degradation transition` key. 
+
+If `failure_mode = 'degradation'` is passed to a `System` object, either the `degradation rate` or `degradation transition` must be defined. Degradation profiles beyond a constant degradation rate have not yet been thoroughly tested.
 
 #### Maintenance parameters
 - `maintenance_policy` - currently either `'CM'` or `'CBM'`.
@@ -49,6 +61,7 @@ These parameters can be set to initialize the system state before simulation. By
 - `initial_remaining_process` - a list of remaining processing times for each machine. By default this is equal to the machine's total processing time when it does not have a part. 
 - `initial_buffer` - a list of initial levels for each buffer. 
 - `initial_health` - a list of initial health states for each machine.
+Valid settings for the initial system state are not currently verified automatically. 
 
 
 ### Creating a custom maintenance scheduler
@@ -137,7 +150,7 @@ Here is a minimum example for implmenting a CBM policy:
 >>> system = maintsim.System(process_times=[3, 5, 4],
 ...                          buffer_sizes=5,
 ...                          failure_mode='degradation',
-...                          failure_params=[0.25, 0.1, 0.2],
+...                          failure_params={'degradation rate':[0.25, 0.1, 0.2]},
 ...                          maintenance_policy='CBM',
 ...                          maintenance_params={'CBM threshold': [8, 6, 7]},
 ...                          repair_params={'CM': stats.randint(20,30),
@@ -155,5 +168,5 @@ Simulation complete in 0.89 s
 Key planned features include
 
 - Support of a preventive maintenance policy, in which machines are repaired at regular intervals
-- Non-homogeneous degradation modes and the ability to specify a complete degradation transition matrix
+- Improved efficiency for iterating a simulation
 - Exporting system model for reuse

@@ -57,8 +57,6 @@ class Scheduler:
         #from .System import System
 
         while True:
-            yield self.env.timeout(1)
-
             # get list of machines awaiting maintenance
             queue = []
             under_repair = 0
@@ -82,4 +80,6 @@ class Scheduler:
                 else: # len(queue) > capacity
                     # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
-                        machine.assigned_maintenance = True                
+                        machine.assigned_maintenance = True    
+            
+            yield self.env.timeout(1)            
