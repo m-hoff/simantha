@@ -8,7 +8,7 @@ setuptools.setup(
     version='0.1.1',
     author='Michael Hoffman',
     author_email='MichaelHoffman@psu.edu',
-    description='Simulation of maintenance in manufacturing systems',
+    description='Simulation and maintenance for manufacturing',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/m-hoff/maintsim',
