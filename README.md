@@ -4,11 +4,7 @@
 
 ## Installing maintsim
 
-`pip install maintsim` 
-
-## Installing maintsim
-
-Currently, the easiest way to install maintsim is to clone the repository using `git clone https://github.com/m-hoff/maintsim.git`. 
+`pip install maintsim`
 
 ## Using this package
 
