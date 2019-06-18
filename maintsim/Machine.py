@@ -247,24 +247,27 @@ class Machine:
 
             self.has_part = False
             # check if part was finished before failure occured
-            if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
-                # I think this works. Might need further valifation
-                if self.m == self.system.M-1:
-                    if self.env.now > self.system.warmup_time:
-                        self.parts_made += 1
-                elif self.out_buff.level < self.out_buff.capacity:
-                # part was finished before failure                        
-                    if self.m < self.system.M-1:
-                        yield self.out_buff.put(1)
-                        self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
-                    
-                    if self.env.now > self.system.warmup_time:
-                        self.parts_made += 1
+            try:
+                if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
+                    # I think this works. Might need further valifation
+                    if self.m == self.system.M-1:
+                        if self.env.now > self.system.warmup_time:
+                            self.parts_made += 1
+                    elif self.out_buff.level < self.out_buff.capacity:
+                    # part was finished before failure                        
+                        if self.m < self.system.M-1:
+                            yield self.out_buff.put(1)
+                            self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
+                        
+                        if self.env.now > self.system.warmup_time:
+                            self.parts_made += 1
 
-                self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
+                    self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
 
-                self.has_part = False
-
+                    self.has_part = False
+            except:
+                pass
+                
             maintenance_start = self.env.now
 
             # generate TTR based on repair type
@@ -315,6 +318,10 @@ class Machine:
             self.system.machine_data.loc[self.idle_start:downtime_stop-1, 
                                             self.name+' forced idle'] = 1
             
+            # stop degradation if new failures are not allowed
+            if not self.allow_new_maintenance:
+                self.degradation = np.eye(self.failed_state+1)
+
             self.system.available_maintenance += 1 # release maintenance resource
 
     def reliability(self): #TODO: validate random TTF reliability
@@ -355,6 +362,15 @@ class Machine:
         '''
         while True:
             try:
+                # stop processing if initialized as failed
+                if (self.env.now == 0) and (self.failed):
+                    try:
+                        self.request_maintenance = True
+                        self.process.interrupt()
+                    except:
+                        pass
+                    
+
                 #print('degradation resumed at t={}'.format(self.env.now))
                 # while random() > self.degradation:
                 #     # do not degrade

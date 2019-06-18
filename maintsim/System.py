@@ -329,6 +329,8 @@ class System:
                 obj.append(production)
             elif objective == 'ppl':
                 ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
+                #littles_law = sim_time / self.bottleneck_process_time 
+                #ppl2 = littles_law - self.machines[self.bottleneck].parts_made
                 obj.append(ppl)
             elif objective == 'availability':
                 functional = ['M{} functional'.format(m) for m in range(self.M)]
