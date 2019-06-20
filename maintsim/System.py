@@ -1,10 +1,10 @@
-import simpy
-
 import time
 import random
+
+from graphviz import Digraph
 import numpy as np
 import pandas as pd
-from graphviz import Digraph
+import simpy
 
 from .Machine import Machine
 from .Scheduler import Scheduler
@@ -36,7 +36,6 @@ class System:
                  allow_new_maintenance=True, # allow creation of new maintenance jobs
 
                  debug=False):
-
         # inferred system characteristics
         self.M = len(process_times) # number of machines
         self.bottleneck_process_time = max(process_times)
@@ -55,11 +54,6 @@ class System:
             self.initial_buffer = [initial_buffer]*(self.M-1)
         else:
             self.initial_buffer = initial_buffer
-
-        # if 'buffer levels' in initiate.keys():
-        #     self.initial_buffer = initiate['buffer levels']
-        # else:
-        #     self.initial_buffer = [0] * (self.M-1)
 
         self.failure_mode = failure_mode
         self.failure_params = failure_params
@@ -103,16 +97,6 @@ class System:
                                 mat[j][j] = 1
                         self.degradation_transition.append(mat)
 
-                # if type(failure_params) == float:
-                #     self.degradation = [failure_params]*self.M
-                # elif type(failure_params) == dict:
-                #     self.degradation = failure_params['degradation rate']
-                #     self.failure_state = failure_params['failed state']
-                # else:
-                #     self.degradation = failure_params
-                #     self.failure_state = 10
-
-
             elif self.failure_mode == 'reliability': # TTF distribution
                 if len(failure_params) == 1:
                     self.reliability = [failure_params]*self.M
@@ -128,18 +112,7 @@ class System:
         else:
             self.initial_health = [0]*self.M
 
-        # if 'machine health' in initiate.keys():
-        #     self.initial_health = initiate['machine health']
-        # else:
-        #     self.initial_health = [0] * self.M
-
         self.repair_params = repair_params
-
-        #self.failures = failures
-        #if degradation:
-        #    self.degradation = degradation
-        #else:
-        #    self.degradation = [0]*len(process_times)
 
         self.planned_failures = planned_failures
         self.maintenance_policy = maintenance_policy
@@ -150,8 +123,6 @@ class System:
             # no capacity by default
             self.maintenance_capacity = self.M
         self.maintenance_costs = maintenance_costs
-
-        #self.scheduling = scheduling
 
         self.debug = debug
 
@@ -213,7 +184,6 @@ class System:
         prod_cols = ['time']      # production data
         machine_cols = ['time']   # machine status data
 
-
         for machine in self.machines:
             state_cols += [machine.name + ' R(t)']
             if machine.m < (self.M - 1):
@@ -234,10 +204,11 @@ class System:
                                                       'type',
                                                       'activity',
                                                       'duration'])
+
         self.data = {'state': self.state_data,
                      'production': self.production_data,
                      'machine': self.machine_data,
-                     'queue':self.queue_data,
+                     'queue': self.queue_data,
                      'maintenance': self.maintenance_data}
 
     def simulate(self, title='Simulation',
@@ -245,7 +216,6 @@ class System:
                  sim_time=100,
                  seed=None,
                  verbose=True):
-
         self.warmup_time = warmup_time
         self.sim_time = sim_time
 

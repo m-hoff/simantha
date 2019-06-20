@@ -1,8 +1,5 @@
 import numpy as np
-
 import simpy
-
-#from .System import System
 
 class Scheduler:
     '''
@@ -13,13 +10,6 @@ class Scheduler:
                  system=None,
                  env=None,
                  **kwds):
-        
-        # self.system = system
-
-        # self.env = env
-
-        # self.env.process(self.scheduling())
-
         if system:
             self.initialize(system, env)
 
@@ -38,8 +28,6 @@ class Scheduler:
         the chosen machine objects which are then flagged by the scheduling
         method.
         '''
-        # MCTS should be solved here
-
         n_machines_to_schedule = self.system.available_maintenance
         next_machines = []
         while n_machines_to_schedule:
@@ -54,8 +42,6 @@ class Scheduler:
         Flags machines to receive maintenance when maintenance resources are
         available.
         '''
-        #from .System import System
-
         while True:
             # get list of machines awaiting maintenance
             queue = []
@@ -65,16 +51,11 @@ class Scheduler:
                     queue.append(machine)
                 if machine.under_repair:
                     under_repair += 1
-
-            #print(self.env.now, ['M{}'.format(mach.m) for mach in queue])
             # scan queue if maintenance resources are available
             if self.system.available_maintenance:
-                #print('Machines in queue: {}, resources avail: {}'.format(len(queue), self.system.available_maintenance))
-                #print('scanning queue at t={}'.format(self.env.now))
                 if len(queue) == 0:
                     pass
                 elif len(queue) <= self.system.maintenance_capacity:
-                    #print('M{} alone in queue'.format(queue[0].m))
                     for machine in queue:
                         machine.assigned_maintenance = True
                 else: # len(queue) > capacity
