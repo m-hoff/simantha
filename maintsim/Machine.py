@@ -178,18 +178,27 @@ class Machine:
             except simpy.Interrupt:
                 self.down = True
 
-                # write failure
                 self.write_failure()
                 
+                while not self.under_repair:
+                    #print(f'M{self.m} waiting for repair at t={self.env.now}')
+                    yield self.env.timeout(1)
+                #print(f'M{self.m} under repair at t={self.env.now}')
+
+
+
                 # stop production until online
                 while self.down:
                     yield self.env.timeout(1)
+                    #if self.m == 3: print(f'M{self.m} down at t={self.env.now}')
+                #print(f'M{self.m} resuming production at t={self.env.now}')
 
     def maintain(self):
         while True:
             while not self.assigned_maintenance:
                 # wait to be scheduled for maintenance
                 yield self.env.timeout(1)
+            #print(f'M{self.m} requested maintenance at t={self.env.now}')
             
             # break loop once scheduled for maintenance
             self.assigned_maintenance = False
@@ -228,6 +237,7 @@ class Machine:
             # generate TTR based on repair type
             if self.repair_type is not 'planned':
                 self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
+                #print(f'M{self.m} TTR={self.time_to_repair}')
             # wait for repair to finish
             for _ in range(self.time_to_repair):
                 yield self.env.timeout(1)
@@ -235,6 +245,8 @@ class Machine:
                 current_queue = ['M{}'.format(machine.m) for machine in self.system.machines if machine.request_maintenance]
                 self.system.queue_data.loc[self.env.now, 'level'] = len(current_queue)
                 self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
+
+            #print(f'M{self.m} repaired at t={self.env.now}', self.down)
 
             # repairman is released
             self.maintenance_request = None                                                  
@@ -246,6 +258,8 @@ class Machine:
             self.under_repair = False
             self.time_entered_queue = 99999
             #self.request_maintenance = False
+
+            #print(f'M{self.m} repaired at t={self.env.now}', self.down)
 
             # record restored health
             self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
@@ -335,6 +349,7 @@ class Machine:
                     
                 if ((self.health == self.failed_state)
                    and (not self.failed)): # machine fails
+                    #print(f'M{self.m} failed at t={self.env.now}')
                     self.failed = True
                     self.repair_type = 'CM'
                     
@@ -361,7 +376,7 @@ class Machine:
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
                 while self.under_repair:
-                    yield self.env.timeout(1)
+                    yield self.env.timeout(1)                
 
     def scheduled_failures(self):
         '''
