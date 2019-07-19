@@ -31,7 +31,7 @@ class Scheduler:
         n_machines_to_schedule = self.system.available_maintenance
         next_machines = []
         while n_machines_to_schedule:
-            next_machine = queue[np.argmin([m.time_entered_queue if m.time_entered_queue else self.env.now for m in queue])]
+            next_machine = queue[np.argmin([i.time_entered_queue if i.time_entered_queue else self.env.now for i in queue])]
             next_machines.append(next_machine)
             n_machines_to_schedule -= 1
 

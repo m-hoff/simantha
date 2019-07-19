@@ -1,0 +1,31 @@
+maintsim process priorities
+
+time = t
+
+- check maintenance
+    - begin maintenance if scheduled
+- check planned failure
+    - begin planned downtime if scheduled
+- degrade
+    - begin downtime if failed state is reached
+
+
+
+
+
+- (attempt to) take part from inbuffer
+    - determine "starved" status
+
+
+
+- process part
+
+
+
+
+
+
+- (attempt to) place processed part in outbuffer
+    - determine "blocked" status
+
+time = t+1
