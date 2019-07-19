@@ -10,7 +10,7 @@ class Machine:
     '''
     def __init__(self, 
                  env, 
-                 m, 
+                 i, 
                  process_time,
                  planned_failures,
                  failure_mode,
@@ -20,8 +20,8 @@ class Machine:
                  allow_new_maintenance):
         self.env = env
         self.system = system
-        self.m = m
-        self.name = 'M{}'.format(self.m)
+        self.i = i
+        self.name = 'M{}'.format(self.i)
         
         self.process_time = process_time
         
@@ -37,21 +37,21 @@ class Machine:
         self.maintenance_policy = self.system.maintenance_policy
         maintenance_parameters = self.system.maintenance_params
         if self.maintenance_policy == 'PM':
-            self.PM_interval = maintenance_parameters['PM interval'][self.m]
-            self.PM_duration = maintenance_parameters['PM duration'][self.m]
+            self.PM_interval = maintenance_parameters['PM interval'][self.i]
+            self.PM_duration = maintenance_parameters['PM duration'][self.i]
         elif self.maintenance_policy == 'CBM':
-            self.CBM_threshold = maintenance_parameters['CBM threshold'][self.m]
+            self.CBM_threshold = maintenance_parameters['CBM threshold'][self.i]
         # 'None' maintenance policy == 'CM'
         
         self.allow_new_maintenance = allow_new_maintenance
 
         # assign input buffer
-        if self.m > 0:
-            self.in_buff = self.system.buffers[self.m-1]
+        if self.i > 0:
+            self.in_buff = self.system.buffers[self.i-1]
             
         # assign output buffer
-        if (self.m < self.system.M-1):
-            self.out_buff = self.system.buffers[m]
+        if (self.i < self.system.n-1):
+            self.out_buff = self.system.buffers[self.i]
         
         # set initial machine state
         # maintenance state
@@ -105,7 +105,7 @@ class Machine:
     def debug_process(self):
         while True:
             try:
-                if (self.m == 1):
+                if (self.i == 1):
                     # put print statements, etc. here
                     pass
                 yield self.env.timeout(1)
@@ -124,9 +124,9 @@ class Machine:
                 self.idle = True
 
                 # get part from input buffer
-                if self.m > 0:
+                if self.i > 0:
                     yield self.in_buff.get(1)                    
-                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m-1)] = self.in_buff.level
+                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.i-1)] = self.in_buff.level
 
                     self.idle_stop = self.env.now
 
@@ -152,9 +152,9 @@ class Machine:
                 # put finished part in output buffer
                 self.idle_start = self.env.now
                 self.idle = True
-                if self.m < self.system.M-1:
+                if self.i < self.system.n-1:
                     yield self.out_buff.put(1) 
-                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level                    
+                    self.system.state_data.loc[self.env.now, 'b{} level'.format(self.i)] = self.out_buff.level                    
 
                     self.idle_stop = self.env.now
                     self.idle = False
@@ -162,7 +162,7 @@ class Machine:
                 if self.env.now > self.system.warmup_time:
                     self.parts_made += 1
                     
-                self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
+                self.system.production_data.loc[self.env.now, 'M{} production'.format(self.i)] = self.parts_made
                 
                 self.has_part = False
                 
@@ -181,24 +181,24 @@ class Machine:
                 self.write_failure()
                 
                 while not self.under_repair:
-                    #print(f'M{self.m} waiting for repair at t={self.env.now}')
+                    #print(f'M{self.i} waiting for repair at t={self.env.now}')
                     yield self.env.timeout(1)
-                #print(f'M{self.m} under repair at t={self.env.now}')
+                #print(f'M{self.i} under repair at t={self.env.now}')
 
 
 
                 # stop production until online
                 while self.down:
                     yield self.env.timeout(1)
-                    #if self.m == 3: print(f'M{self.m} down at t={self.env.now}')
-                #print(f'M{self.m} resuming production at t={self.env.now}')
+                    #if self.i == 3: print(f'M{self.i} down at t={self.env.now}')
+                #print(f'M{self.i} resuming production at t={self.env.now}')
 
     def maintain(self):
         while True:
             while not self.assigned_maintenance:
                 # wait to be scheduled for maintenance
                 yield self.env.timeout(1)
-            #print(f'M{self.m} requested maintenance at t={self.env.now}')
+            #print(f'M{self.i} requested maintenance at t={self.env.now}')
             
             # break loop once scheduled for maintenance
             self.assigned_maintenance = False
@@ -212,21 +212,21 @@ class Machine:
             self.has_part = False
             # check if part was finished before failure occured
             try:
-                if (self.system.M > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.m)] == 1):                    
+                if (self.system.n > 1) and (self.system.state_data.loc[self.env.now-1, 'M{} R(t)'.format(self.i)] == 1):                    
                     # I think this works. Might need further valifation
-                    if self.m == self.system.M-1:
+                    if self.i == self.system.n-1:
                         if self.env.now > self.system.warmup_time:
                             self.parts_made += 1
                     elif self.out_buff.level < self.out_buff.capacity:
                     # part was finished before failure                        
-                        if self.m < self.system.M-1:
+                        if self.i < self.system.n-1:
                             yield self.out_buff.put(1)
-                            self.system.state_data.loc[self.env.now, 'b{} level'.format(self.m)] = self.out_buff.level
+                            self.system.state_data.loc[self.env.now, 'b{} level'.format(self.i)] = self.out_buff.level
                         
                         if self.env.now > self.system.warmup_time:
                             self.parts_made += 1
 
-                    self.system.production_data.loc[self.env.now, 'M{} production'.format(self.m)] = self.parts_made
+                    self.system.production_data.loc[self.env.now, 'M{} production'.format(self.i)] = self.parts_made
 
                     self.has_part = False
             except:
@@ -237,7 +237,7 @@ class Machine:
             # generate TTR based on repair type
             if self.repair_type is not 'planned':
                 self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
-                #print(f'M{self.m} TTR={self.time_to_repair}')
+                #print(f'M{self.i} TTR={self.time_to_repair}')
             # wait for repair to finish
             for _ in range(self.time_to_repair):
                 yield self.env.timeout(1)
@@ -246,7 +246,7 @@ class Machine:
                 self.system.queue_data.loc[self.env.now, 'level'] = len(current_queue)
                 self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
 
-            #print(f'M{self.m} repaired at t={self.env.now}', self.down)
+            #print(f'M{self.i} repaired at t={self.env.now}', self.down)
 
             # repairman is released
             self.maintenance_request = None                                                  
@@ -259,18 +259,18 @@ class Machine:
             self.time_entered_queue = 99999
             #self.request_maintenance = False
 
-            #print(f'M{self.m} repaired at t={self.env.now}', self.down)
+            #print(f'M{self.i} repaired at t={self.env.now}', self.down)
 
             # record restored health
             self.system.machine_data.loc[self.env.now, self.name+' health'] = self.health
             
             maintenance_stop = self.env.now            
 
-            self.system.machine_data.loc[maintenance_start:maintenance_stop-1, 'M{} functional'.format(self.m)] = 0
+            self.system.machine_data.loc[maintenance_start:maintenance_stop-1, 'M{} functional'.format(self.i)] = 0
             
             # write repair data
             new_repair = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
-                                        'machine':[self.m],
+                                        'machine':[self.i],
                                         'type':[self.repair_type],
                                         'activity':['repair'],
                                         'duration':[maintenance_stop-maintenance_start]})
@@ -349,7 +349,7 @@ class Machine:
                     
                 if ((self.health == self.failed_state)
                    and (not self.failed)): # machine fails
-                    #print(f'M{self.m} failed at t={self.env.now}')
+                    #print(f'M{self.i} failed at t={self.env.now}')
                     self.failed = True
                     self.repair_type = 'CM'
                     
@@ -410,7 +410,7 @@ class Machine:
                     yield self.env.timeout(1)
 
     def get_priority(self):
-        return self.m
+        return self.i
 
     def update_priority(self):
         '''
@@ -433,7 +433,7 @@ class Machine:
             TTF = 'NA'
 
         new_failure = pd.DataFrame({'time':[self.env.now-self.system.warmup_time],
-                                    'machine':[self.m],
+                                    'machine':[self.i],
                                     'type':[self.repair_type],
                                     'activity':['failure'],
                                     'duration':[TTF]})
