@@ -131,10 +131,6 @@ A system can be simulated several times using the `System.iterate_simulation` me
   - `availability` - the overall availability of machines in the system as a percentage.
 - `verbose` - `True` or `False`, determines whether or not summary statistics will be displayed once all replications are completed. 
 
-### Other features
-
-- The method `System.draw()` will display the system layout using the graphviz pacakge (only tested in jupyter notebooks).
-
 ## A simple example
 
 Here is a minimum example for implmenting a CBM policy:
@@ -163,6 +159,7 @@ Simulation complete in 0.89 s
 
 Key planned features include
 
-- Support of a preventive maintenance policy, in which machines are repaired at regular intervals
+- Parallelization of simulation iterations
 - Improved efficiency for iterating a simulation
 - Exporting system model for reuse
+- Support of a preventive maintenance policy, in which machines are repaired at regular intervals

@@ -28,4 +28,9 @@ time = t
 - (attempt to) place processed part in outbuffer
     - determine "blocked" status
 
+
+
+
+- check if maintenance completed
+
 time = t+1
