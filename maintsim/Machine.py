@@ -91,7 +91,7 @@ class Machine:
         
         self.planned_downtime = self.env.process(self.scheduled_failures())
 
-        self.env.process(self.maintain())
+        #self.env.process(self.maintain())
 
         if self.system.debug:
             self.env.process(self.debug_process())
@@ -170,16 +170,17 @@ class Machine:
                         self.total_downtime += (self.idle_stop - self.idle_start)
                                 
             except simpy.Interrupt:
+                print('production interrupted')
                 self.down = True
 
                 self.write_failure()
-                
-                while not self.under_repair:
-                    #print(f'M{self.i} waiting for repair at t={self.env.now}')
-                    yield self.env.timeout(1)
+
+                # while not self.under_repair:
+                #     #print(f'M{self.i} waiting for repair at t={self.env.now}')
+                #     yield self.env.timeout(1)
                 #print(f'M{self.i} under repair at t={self.env.now}')
 
-
+                yield self.env.process(self.maintain())
 
                 # stop production until online
                 while self.down:
@@ -188,12 +189,13 @@ class Machine:
                 if self.i == 0: print(f'M{self.i} resumed production at t={self.env.now}')
 
     def maintain(self):
+        print('calling maintenance')
         while True:
             
-            while not self.assigned_maintenance:
-                # wait to be scheduled for maintenance
-                if self.i == 0: print(f'M{self.i} checking if due for maintenance at t={self.env.now}')
-                yield self.env.timeout(1)
+            # while not self.assigned_maintenance:
+            #     # wait to be scheduled for maintenance
+            #     if self.i == 0: print(f'M{self.i} checking if due for maintenance at t={self.env.now}')
+            #     yield self.env.timeout(1)
             if self.i == 0: print(f'M{self.i} scheduled for maintenance at t={self.env.now}')
 
             # break loop once scheduled for maintenance
@@ -342,7 +344,7 @@ class Machine:
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
                 while self.under_repair:
-                    yield self.env.timeout(1)                
+                    yield self.env.timeout(1)
 
     def scheduled_failures(self):
         '''
