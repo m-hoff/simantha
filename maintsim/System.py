@@ -264,7 +264,7 @@ class System:
             col2 = 'M{} forced idle'.format(i)
             self.machine_data[col2] = self.machine_data[col2].fillna(1)
 
-            self.machines[i].total_downtime = sum(self.machine_data[col2])
+            #self.machines[i].total_downtime = sum(self.machine_data[col2])
 
             self.machine_data['M{} health'.format(i)].astype(int)
 

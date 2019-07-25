@@ -35,6 +35,10 @@ class Scheduler:
             next_machines.append(next_machine)
             n_machines_to_schedule -= 1
 
+            if self.system.debug:
+                print(f'Scheduler interrupting M{next_machine.i} processing at t={self.env.now}')
+            next_machine.process.interrupt()
+
         return next_machines # returns machine that will begin maintenance
 
     def scheduling(self):
@@ -58,9 +62,13 @@ class Scheduler:
                 elif len(queue) <= self.system.maintenance_capacity:
                     for machine in queue:
                         machine.assigned_maintenance = True
+                        if self.system.debug:
+                            print(f'Scheduler interrupting M{machine.i} processing at t={self.env.now}')
+                        machine.process.interrupt()
                 else: # len(queue) > capacity
                     # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
                         machine.assigned_maintenance = True    
             
             yield self.env.timeout(1)            
+            
