@@ -15,7 +15,6 @@ maintsim relies on the following packages in addition to Python 3.6+:
 - [SimPy](https://simpy.readthedocs.io/en/latest/) version 3.0.11
 - [pandas](https://pandas.pydata.org/) version >= 0.23.4
 - [SciPy](https://www.scipy.org) version >= 1.1.0 (if specifying random repair times)
-- [Graphviz](https://graphviz.readthedocs.io/en/stable/) version 0.10.1 (untested)
 
 ### Setting up a manufacturing system
 

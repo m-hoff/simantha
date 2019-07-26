@@ -91,15 +91,13 @@ class Machine:
         
         self.planned_downtime = self.env.process(self.scheduled_failures())
 
-        #if self.system.debug:
-        if 1:
+        if self.system.debug:
             self.env.process(self.debug_process())
                 
     def debug_process(self):
         while True:
             try:
                 if (self.i == 0):
-                    print(f't={self.env.now}', self.total_downtime)
                     pass
                 yield self.env.timeout(1)
                 
@@ -133,7 +131,7 @@ class Machine:
 
                     if self.env.now > self.system.warmup_time:       
                         self.total_downtime += (self.idle_stop - self.idle_start)
-                        #if self.i==0: print(f'Incrementing idle time by {self.idle_stop - self.idle_start} at t={self.env.now}')
+                        
                 # process part
                 while self.remaining_process_time:
                     self.system.state_data.loc[self.env.now, self.name+' R(t)'] = self.remaining_process_time
@@ -166,21 +164,10 @@ class Machine:
                     self.system.machine_data.loc[self.idle_start:self.idle_stop-1, 
                                                  self.name+' forced idle'] = 1
                     if self.env.now > self.system.warmup_time:
-                        self.total_downtime += (self.idle_stop - self.idle_start)
-                        #if self.i==0: print(f'Incrementing idle time by {self.idle_stop - self.idle_start} at t={self.env.now}')
-                        #print(f'M{self.i} blocked from t={self.idle_start} to t={self.idle_stop}')
+                        self.total_downtime += (self.idle_stop - self.idle_start)                        
                                 
-            except simpy.Interrupt:
-                if self.system.debug and self.i == 0: 
-                    print(f'M{self.i} interrupted production at t={self.env.now}')
+            except simpy.Interrupt:                
                 self.down = True
-
-                #self.write_failure()
-
-                # while not self.under_repair:
-                #     #print(f'M{self.i} waiting for repair at t={self.env.now}')
-                #     yield self.env.timeout(1)
-                #print(f'M{self.i} under repair at t={self.env.now}')
 
                 # wait for maintenance to finish
                 yield self.env.process(self.maintain())
@@ -188,26 +175,11 @@ class Machine:
                 # stop production until online
                 while self.down:
                     yield self.env.timeout(1)
-                    #if self.i == 3: print(f'M{self.i} down at t={self.env.now}')
-                if self.system.debug and self.i == 0: 
-                    print(f'M{self.i} resumed production at t={self.env.now}\n')
 
-    def maintain(self):
-        #while True:
-            
-            # while not self.assigned_maintenance:
-            #     # wait to be scheduled for maintenance
-            #     if self.i == 0: print(f'M{self.i} checking if due for maintenance at t={self.env.now}')
-            #     yield self.env.timeout(1)
-
-        if self.system.debug and self.i == 0: 
-            print(f'M{self.i} scheduled for maintenance at t={self.env.now}')
-        
+    def maintain(self):        
         if self.repair_type == 'CBM':
             if not self.system.available_maintenance:
-                return
-            if self.system.debug and self.i == 0: 
-                print(f'M{self.i} scheduled for CBM at t={self.env.now}')
+                return            
 
         # break loop once scheduled for maintenance
         self.assigned_maintenance = False
@@ -243,22 +215,15 @@ class Machine:
         #     pass
                 
         maintenance_start = self.env.now
-        if self.system.debug:
-            print(f'M{self.i} starting maintenance at t={self.env.now}')
 
         # generate TTR based on repair type
         if self.repair_type is not 'planned':
             self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
-            if self.system.debug:
-                print(f'M{self.i} TTR={self.time_to_repair} at t={self.env.now}')
-            #print(f'M{self.i} TTR={self.time_to_repair}')
 
         if self.env.now + self.time_to_repair > self.system.warmup_time + self.system.sim_time:
             # repair goes beyond simulation time
-            dt = (self.system.warmup_time + self.system.sim_time) - self.env.now 
-            #if self.i==0: print(f'Incrementing idle time by {dt} at t={self.env.now}')
+            dt = (self.system.warmup_time + self.system.sim_time) - self.env.now             
             self.total_downtime += dt
-
 
         # wait for repair to finish
         for _ in range(self.time_to_repair):
@@ -267,9 +232,6 @@ class Machine:
             current_queue = [f'M{machine.i}' for machine in self.system.machines if machine.request_maintenance]
             self.system.queue_data.loc[self.env.now, 'level'] = len(current_queue)
             self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
-        
-        if self.system.debug:
-            print(f'M{self.i} repaired at t={self.env.now}')
 
         # repairman is released
         self.maintenance_request = None                                                  
@@ -300,8 +262,7 @@ class Machine:
         downtime_stop = self.env.now
 
         # record idle time due to repair
-        if self.env.now > self.system.warmup_time:       
-            #if self.i==0: print(f'Incrementing idle time by {downtime_stop-downtime_start} at t={self.env.now}')
+        if self.env.now > self.system.warmup_time:                   
             self.total_downtime += (downtime_stop - downtime_start)
         
         # machine was idle before failure                
@@ -340,8 +301,6 @@ class Machine:
                     
                 if ((self.health == self.failed_state)
                    and (not self.failed)): # machine fails
-                    if self.system.debug and self.i == 0: 
-                        print(f'M{self.i} reached failure at t={self.env.now}')
                     self.failed = True
                     self.repair_type = 'CM'
                     
@@ -365,9 +324,6 @@ class Machine:
                     self.time_entered_queue = min([self.time_entered_queue, self.env.now])
                     
                     self.write_failure()
-
-                # elif self.maintenance_policy == 'CBM' and self.health >= self.CBM_threshold:
-                #     yield self.env.process(self.maintain())
 
             except simpy.Interrupt:
                 # stop degradation process while machine is under repair
@@ -404,27 +360,11 @@ class Machine:
             except simpy.Interrupt:
                 while self.under_repair:
                     yield self.env.timeout(1)
-
-    def get_priority(self):
-        return self.i
-
-    def update_priority(self):
-        '''
-        Update the maintenance priority for this machine.
-        '''
-        if (self.maintenance_request) and (not self.under_repair):
-            # delete request, update priority 
-            self.maintenance_request.cancel()
-            priority = self.get_priority()
-            self.maintenance_request = self.system.repairman.request(priority=priority)
-            yield self.maintenance_request
     
     def write_failure(self):
         '''
         Write new failure occurence to simulation data.
         '''
-        if self.system.debug:
-            print(f'Writing {self.repair_type} failure on M{self.i} at t={self.env.now}')
         if self.last_repair_time:
             TTF = self.env.now - self.last_repair_time
         else:

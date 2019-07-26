@@ -12,7 +12,7 @@ class ProductionTest(unittest.TestCase):
     '''
     def test_production1(self):
         '''
-        Production volume of one machine.
+        Deterministic production volume of one machine.
         '''
         time_horizon = 500
         cycle_time = 5
@@ -27,7 +27,7 @@ class ProductionTest(unittest.TestCase):
 
     def test_production2(self):
         '''
-        Production volume of one machine.
+        Deterministic production volume of one machine.
         '''
         time_horizon = 500
         cycle_time = 10
@@ -42,7 +42,7 @@ class ProductionTest(unittest.TestCase):
 
     def test_production3(self):
         '''
-        Production volume of a two-machine line.
+        Deterministic production volume of a two-machine line.
         '''
         time_horizon = 500
         cycle_times = [5, 3]
@@ -58,7 +58,7 @@ class ProductionTest(unittest.TestCase):
 
     def test_production4(self):
         '''
-        Test average throughput with degradation.
+        Test (stochasitc) average throughput with degradation.
         '''
         repair_lower = 5
         repair_upper = 15
@@ -125,7 +125,7 @@ class ProductionTest(unittest.TestCase):
             # gather ttf samples from simulation
             ttfs = system.maintenance_data[system.maintenance_data['activity'] == 'failure']['duration'].values
             ttfs = ttfs[ttfs != 'NA']
-            np.append(ttf_samples, ttfs) 
+            ttf_samples = np.append(ttf_samples, ttfs) 
 
         # calculate true expected ttf (expected time to absorption)
         def expected_ttf(Q):
@@ -137,7 +137,6 @@ class ProductionTest(unittest.TestCase):
             return t
 
         E_ttf = expected_ttf(system.machines[0].degradation)[0][0]
-
         # conduct one sample t-test
         # H_0: average ttf sample = expected ttf
         # H_1: average ttf sample != expected ttf
@@ -146,6 +145,23 @@ class ProductionTest(unittest.TestCase):
         message = f'Mean TTF is {np.mean(ttf_samples)} from {len(ttf_samples)} samples'
         self.assertGreaterEqual(p_value, 0.10, msg=message)
 
+    def test_ppl1(self):
+        '''
+        Test permanent production loss (PPL) measurement of one machine.
+        '''
+        system = maintsim.System(process_times=[5], 
+                            failure_mode='degradation',
+                            failure_params={'failed state': 10,
+                                            'degradation rate': 0.2},
+                            repair_params={'CM': stats.randint(2,3)})
+        system.simulate(sim_time=1000, verbose=False)
+
+        repairs = system.maintenance_data[system.maintenance_data['activity'] == 'repair']
+        total_repair_time = sum(repairs['duration'])
+
+        self.assertEqual(total_repair_time,
+                         system.machines[0].total_downtime,
+                         f'Should be {total_repair_time}')
 
 if __name__ == '__main__':
     unittest.main()
