@@ -1,10 +1,9 @@
-import simpy
-
 import time
 import random
+
 import numpy as np
 import pandas as pd
-from graphviz import Digraph
+import simpy
 
 from .Machine import Machine
 from .Scheduler import Scheduler
@@ -36,9 +35,8 @@ class System:
                  allow_new_maintenance=True, # allow creation of new maintenance jobs
 
                  debug=False):
-
         # inferred system characteristics
-        self.M = len(process_times) # number of machines
+        self.n = len(process_times) # number of machines
         self.bottleneck_process_time = max(process_times)
         self.bottleneck = process_times.index(self.bottleneck_process_time)
 
@@ -47,19 +45,14 @@ class System:
         self.initial_remaining_process = initial_remaining_process
         self.interarrival_time = interarrival_time
         if type(buffer_sizes) == int:
-            self.buffer_sizes = [buffer_sizes]*(self.M-1)
+            self.buffer_sizes = [buffer_sizes]*(self.n-1)
         else:
             self.buffer_sizes = buffer_sizes
 
         if type(initial_buffer) == int:
-            self.initial_buffer = [initial_buffer]*(self.M-1)
+            self.initial_buffer = [initial_buffer]*(self.n-1)
         else:
             self.initial_buffer = initial_buffer
-
-        # if 'buffer levels' in initiate.keys():
-        #     self.initial_buffer = initiate['buffer levels']
-        # else:
-        #     self.initial_buffer = [0] * (self.M-1)
 
         self.failure_mode = failure_mode
         self.failure_params = failure_params
@@ -74,7 +67,7 @@ class System:
                         self.degradation_transition = failure_params['degradation transition']
                     else:
                         # same transition matrix for each machine
-                        self.degradation_transition = failure_params['degradation transition']*self.M
+                        self.degradation_transition = failure_params['degradation transition']*self.n
 
                 else:
                     if type(failure_params['degradation rate']) == list:
@@ -82,17 +75,17 @@ class System:
                         self.degradation_rate = failure_params['degradation rate']
                     else:
                         # same rate for each machine
-                        self.degradation_rate = [failure_params['degradation rate']]*self.M
+                        self.degradation_rate = [failure_params['degradation rate']]*self.n
 
                     if 'failed state' not in failure_params.keys():
                         # default h_max
-                        h_max = [10]*self.M
+                        h_max = [10]*self.n
                     elif type(failure_params['failed state']) == int:
                         # single h_max for all machines
-                        h_max = [failure_params['failed state']]*self.M
+                        h_max = [failure_params['failed state']]*self.n
                                         
                     self.degradation_transition = []
-                    for i in range(self.M):
+                    for i in range(self.n):
                         rate = self.degradation_rate[i]
                         mat = np.zeros((h_max[i]+1, h_max[i]+1))
                         for j in range(h_max[i]+1):
@@ -103,43 +96,22 @@ class System:
                                 mat[j][j] = 1
                         self.degradation_transition.append(mat)
 
-                # if type(failure_params) == float:
-                #     self.degradation = [failure_params]*self.M
-                # elif type(failure_params) == dict:
-                #     self.degradation = failure_params['degradation rate']
-                #     self.failure_state = failure_params['failed state']
-                # else:
-                #     self.degradation = failure_params
-                #     self.failure_state = 10
-
-
             elif self.failure_mode == 'reliability': # TTF distribution
                 if len(failure_params) == 1:
-                    self.reliability = [failure_params]*self.M
+                    self.reliability = [failure_params]*self.n
                 else:
                     self.reliability = failure_params
 
         else: # no degradation
             self.failure_mode = None
-            self.degradation_transition = [np.zeros((5,5))]*self.M
+            self.degradation_transition = [np.zeros((5,5))]*self.n
 
         if initial_health:
             self.initial_health = initial_health
         else:
-            self.initial_health = [0]*self.M
-
-        # if 'machine health' in initiate.keys():
-        #     self.initial_health = initiate['machine health']
-        # else:
-        #     self.initial_health = [0] * self.M
+            self.initial_health = [0]*self.n
 
         self.repair_params = repair_params
-
-        #self.failures = failures
-        #if degradation:
-        #    self.degradation = degradation
-        #else:
-        #    self.degradation = [0]*len(process_times)
 
         self.planned_failures = planned_failures
         self.maintenance_policy = maintenance_policy
@@ -148,10 +120,8 @@ class System:
             self.maintenance_capacity = maintenance_capacity
         else:
             # no capacity by default
-            self.maintenance_capacity = self.M
+            self.maintenance_capacity = self.n
         self.maintenance_costs = maintenance_costs
-
-        #self.scheduling = scheduling
 
         self.debug = debug
 
@@ -185,25 +155,25 @@ class System:
         self.buffers = []
         self.machines = []
 
-        for m in range(self.M):
+        for i in range(self.n):
             # buffer objects
-            if m < (self.M - 1):
-                self.buffers += [simpy.Container(self.env, capacity=self.buffer_sizes[m], init=self.initial_buffer[m])]
+            if i < (self.n - 1):
+                self.buffers += [simpy.Container(self.env, capacity=self.buffer_sizes[i], init=self.initial_buffer[i])]
 
-            # planned failures for m
+            # planned failures for i
             if self.planned_failures:
-                planned_failures_m = [DT for DT in self.planned_failures if DT[0] == m]
+                planned_failures_i = [DT for DT in self.planned_failures if DT[0] == i]
             else:
-                planned_failures_m = []
+                planned_failures_i = []
 
             # machine objects
-            process_time = self.process_times[m]
-            self.machines += [Machine(self.env, m, process_time, planned_failures_m,
-                              self.failure_mode, self.degradation_transition[m], 
-                              self.initial_health[m], self, self.allow_new_maintenance)]
+            process_time = self.process_times[i]
+            self.machines += [Machine(self.env, i, process_time, planned_failures_i,
+                              self.failure_mode, self.degradation_transition[i], 
+                              self.initial_health[i], self, self.allow_new_maintenance)]
 
             if self.initial_remaining_process:
-                self.machines[m].remaining_process_time = self.initial_remaining_process[m]            
+                self.machines[i].remaining_process_time = self.initial_remaining_process[i]            
 
         # initialize scheduler object
         self.scheduler.initialize(self, self.env)
@@ -213,11 +183,10 @@ class System:
         prod_cols = ['time']      # production data
         machine_cols = ['time']   # machine status data
 
-
         for machine in self.machines:
             state_cols += [machine.name + ' R(t)']
-            if machine.m < (self.M - 1):
-                state_cols += ['b{} level'.format(machine.m)]
+            if machine.i < (self.n - 1):
+                state_cols += ['b{} level'.format(machine.i)]
 
             prod_cols += [machine.name+' production', machine.name+' throughput']
 
@@ -234,10 +203,11 @@ class System:
                                                       'type',
                                                       'activity',
                                                       'duration'])
+
         self.data = {'state': self.state_data,
                      'production': self.production_data,
                      'machine': self.machine_data,
-                     'queue':self.queue_data,
+                     'queue': self.queue_data,
                      'maintenance': self.maintenance_data}
 
     def simulate(self, title='Simulation',
@@ -245,7 +215,6 @@ class System:
                  sim_time=100,
                  seed=None,
                  verbose=True):
-
         self.warmup_time = warmup_time
         self.sim_time = sim_time
 
@@ -268,36 +237,36 @@ class System:
 
         # clean data frames
         #   state data
-        for m in range(self.M):
+        for i in range(self.n):
             # clean buffer level data
-            if m < self.M-1:
-                self.state_data['b{} level'.format(m)].ffill(inplace=True)
-                self.state_data['b{} level'.format(m)].fillna(0, inplace=True)                                
+            if i < self.n-1:
+                self.state_data['b{} level'.format(i)].ffill(inplace=True)
+                self.state_data['b{} level'.format(i)].fillna(0, inplace=True)                                
 
             # clean remaining processing time data
-            self.state_data['M{} R(t)'.format(m)].fillna(0, inplace=True)
+            self.state_data['M{} R(t)'.format(i)].fillna(0, inplace=True)
 
         #  production data
         self.production_data.fillna(method='ffill', inplace=True)
         self.production_data.fillna(0, inplace=True)
-        for m in range(self.M):
-            TH_col = 'M{} throughput'.format(m)
-            self.production_data[TH_col] = self.production_data['M{} production'.format(m)]/self.production_data['time']
+        for i in range(self.n):
+            TH_col = 'M{} throughput'.format(i)
+            self.production_data[TH_col] = self.production_data['M{} production'.format(i)]/self.production_data['time']
 
         #  machine data
-        for m in range(self.M):
-            self.machine_data['M{} health'.format(m)].ffill(inplace=True)
-            self.machine_data['M{} health'.format(m)].fillna(self.initial_health[m], inplace=True)
+        for i in range(self.n):
+            self.machine_data['M{} health'.format(i)].ffill(inplace=True)
+            self.machine_data['M{} health'.format(i)].fillna(self.initial_health[i], inplace=True)
 
-            col1 = 'M{} functional'.format(m)
+            col1 = 'M{} functional'.format(i)
             self.machine_data[col1] = self.machine_data[col1].fillna(1)
 
-            col2 = 'M{} forced idle'.format(m)
+            col2 = 'M{} forced idle'.format(i)
             self.machine_data[col2] = self.machine_data[col2].fillna(1)
 
-            self.machines[m].total_downtime = sum(self.machine_data[col2])
+            #self.machines[i].total_downtime = sum(self.machine_data[col2])
 
-            self.machine_data['M{} health'.format(m)].astype(int)
+            self.machine_data['M{} health'.format(i)].astype(int)
 
         #  queue data
         self.queue_data.ffill(inplace=True)
@@ -312,30 +281,74 @@ class System:
             print('Simulation complete in {:.2f}s\n'.format(time.time()-start_time))
             print('  Units produced:      {}'.format(self.machines[-1].parts_made))
             
-            functional = ['M{} functional'.format(m) for m in range(self.M)]
+            functional = ['M{} functional'.format(i) for i in range(self.n)]
             functional = self.machine_data[self.machine_data['time'] >= 0][functional]
-            avail = functional.sum().sum() / (self.M * self.sim_time)
+            avail = functional.sum().sum() / (self.n * self.sim_time)
 
             print('  System availability: {:.2f}%\n'.format(avail*100))
 
     def iterate_simulation(self, replications, warmup_time=0, sim_time=100, 
-                           objective='production', verbose=True):
+                           objective='production', parallelize=False, verbose=True):
         start_time = time.time()                           
-        obj = []
-        for _ in range(replications):
-            self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
-        
-            if objective == 'production':
-                production = self.machines[-1].parts_made
-                obj.append(production)
-            elif objective == 'ppl':
-                ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
-                obj.append(ppl)
-            elif objective == 'availability':
-                functional = ['M{} functional'.format(m) for m in range(self.M)]
-                functional = self.machine_data[self.machine_data['time'] >= 0][functional]
-                avail = 100*functional.sum().sum() / (self.M * self.sim_time)
-                obj.append(avail)
+        #obj = []
+        if parallelize:
+            # run iterations in parallel on multiple cpu cores
+            from pathos.multiprocessing import ProcessingPool as Pool
+            #cores = multiprocessing.cpu_count()
+
+            def simulate_in_parallel(warmup_time, sim_time):
+                return self.iterate_simulation(replications=1, warmup_time=warmup_time, sim_time=sim_time, verbose=0)
+                # self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
+            
+                # if objective == 'production':
+                #     production = self.machines[-1].parts_made
+                #     return production
+                # elif objective == 'ppl':
+                #     ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
+                #     #littles_law = sim_time / self.bottleneck_process_time 
+                #     #ppl2 = littles_law - self.machines[self.bottleneck].parts_made
+                #     return ppl
+                # elif objective == 'availability':
+                #     functional = ['M{} functional'.format(i) for i in range(self.n)]
+                #     functional = self.machine_data[self.machine_data['time'] >= 0][functional]
+                #     avail = 100*functional.sum().sum() / (self.n * self.sim_time)
+                #     return avail
+
+            with Pool(replications) as p:
+                p_result = p.map(simulate_in_parallel, 
+                                 [(warmup_time, sim_time)]*replications)
+
+            stop_time = time.time()
+            total_time = stop_time - start_time
+            if verbose:
+                units = {'production': 'units',
+                        'ppl': 'units lost production',
+                        'availability': '% availability'}
+                        
+                print('{} replications finished in {:.2f}s, {:.2f}s/rep'
+                    .format(replications, total_time, total_time/replications))
+                #print('Average objective: {:.2f} {}'.format(np.mean(obj), units[objective]))
+
+            return p_result
+
+        else:
+            obj = []
+            for _ in range(replications):
+                self.simulate(warmup_time=warmup_time, sim_time=sim_time, verbose=False)
+            
+                if objective == 'production':
+                    production = self.machines[-1].parts_made
+                    obj.append(production)
+                elif objective == 'ppl':
+                    ppl = self.machines[self.bottleneck].total_downtime / self.machines[self.bottleneck].process_time
+                    #littles_law = sim_time / self.bottleneck_process_time 
+                    #ppl2 = littles_law - self.machines[self.bottleneck].parts_made
+                    obj.append(ppl)
+                elif objective == 'availability':
+                    functional = ['M{} functional'.format(i) for i in range(self.n)]
+                    functional = self.machine_data[self.machine_data['time'] >= 0][functional]
+                    avail = 100*functional.sum().sum() / (self.n * self.sim_time)
+                    obj.append(avail)
 
         stop_time = time.time()
         total_time = stop_time - start_time
@@ -351,43 +364,43 @@ class System:
         
         return obj    
 
-    def draw(self):
-        '''
-        Draw the system diagram. Only tested for jupyter notebooks.
-        '''
-        sys = Digraph(comment='System layout')
+    # def draw(self):
+    #     '''
+    #     Draw the system diagram. Only tested for jupyter notebooks.
+    #     '''
+    #     sys = Digraph(comment='System layout')
 
-        # create machine node shape
-        sys.attr('node', shape='rectangle', height='0.5', width='0.75')
+    #     # create machine node shape
+    #     sys.attr('node', shape='rectangle', height='0.5', width='0.75')
 
-        # create invisible source node
-        sys.node('source', '', style='invis', width='0.1')
+    #     # create invisible source node
+    #     sys.node('source', '', style='invis', width='0.1')
 
-        # create node for each machine
-        for m in range(self.M):
-            Mi = 'M{}'.format(m)
-            sys.node(Mi, Mi)
+    #     # create node for each machine
+    #     for i in range(self.n):
+    #         Mi = 'M{}'.format(i)
+    #         sys.node(Mi, Mi)
 
-        # create node for each buffer
-        sys.attr('node', shape='circle', **{'height':'0.1', 'width':'0.1'})
-        for m in range(self.M-1):
-            Bi = 'B{}'.format(m)
+    #     # create node for each buffer
+    #     sys.attr('node', shape='circle', **{'height':'0.1', 'width':'0.1'})
+    #     for i in range(self.n-1):
+    #         Bi = 'B{}'.format(i)
 
-            sys.node(Bi, Bi)
+    #         sys.node(Bi, Bi)
 
-        # create invisible sink
-        sys.node('sink', '', style='invis', width='0.1')
+    #     # create invisible sink
+    #     sys.node('sink', '', style='invis', width='0.1')
 
-        # add edges to adjacent nodes
-        sys.attr('edge', arrowsize='0.65')
-        sys.edge('source', 'M0')
-        if self.M > 1:
-            for m in range(self.M-1):
-                sys.edge('M{}'.format(m),'B{}'.format(m))
-                sys.edge('B{}'.format(m),'M{}'.format(m+1))
-        sys.edge('M{}'.format(self.M-1),'sink')
+    #     # add edges to adjacent nodes
+    #     sys.attr('edge', arrowsize='0.65')
+    #     sys.edge('source', 'M0')
+    #     if self.n > 1:
+    #         for i in range(self.n-1):
+    #             sys.edge('M{}'.format(i),'B{}'.format(i))
+    #             sys.edge('B{}'.format(i),'M{}'.format(i+1))
+    #     sys.edge('M{}'.format(self.n-1),'sink')
 
-        # orient horizontally
-        sys.graph_attr['rankdir'] = 'LR'
+    #     # orient horizontally
+    #     sys.graph_attr['rankdir'] = 'LR'
 
-        return sys
+    #     return sys

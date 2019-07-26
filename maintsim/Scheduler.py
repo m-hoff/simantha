@@ -1,8 +1,5 @@
 import numpy as np
-
 import simpy
-
-#from .System import System
 
 class Scheduler:
     '''
@@ -13,13 +10,6 @@ class Scheduler:
                  system=None,
                  env=None,
                  **kwds):
-        
-        # self.system = system
-
-        # self.env = env
-
-        # self.env.process(self.scheduling())
-
         if system:
             self.initialize(system, env)
 
@@ -38,14 +28,16 @@ class Scheduler:
         the chosen machine objects which are then flagged by the scheduling
         method.
         '''
-        # MCTS should be solved here
-
         n_machines_to_schedule = self.system.available_maintenance
         next_machines = []
         while n_machines_to_schedule:
-            next_machine = queue[np.argmin([m.time_entered_queue if m.time_entered_queue else self.env.now for m in queue])]
+            next_machine = queue[np.argmin([i.time_entered_queue if i.time_entered_queue else self.env.now for i in queue])]
             next_machines.append(next_machine)
             n_machines_to_schedule -= 1
+
+            if self.system.debug:
+                print(f'Scheduler interrupting M{next_machine.i} processing at t={self.env.now}')
+            next_machine.process.interrupt()
 
         return next_machines # returns machine that will begin maintenance
 
@@ -54,8 +46,6 @@ class Scheduler:
         Flags machines to receive maintenance when maintenance resources are
         available.
         '''
-        #from .System import System
-
         while True:
             # get list of machines awaiting maintenance
             queue = []
@@ -65,21 +55,20 @@ class Scheduler:
                     queue.append(machine)
                 if machine.under_repair:
                     under_repair += 1
-
-            #print(self.env.now, ['M{}'.format(mach.m) for mach in queue])
             # scan queue if maintenance resources are available
             if self.system.available_maintenance:
-                #print('Machines in queue: {}, resources avail: {}'.format(len(queue), self.system.available_maintenance))
-                #print('scanning queue at t={}'.format(self.env.now))
                 if len(queue) == 0:
                     pass
                 elif len(queue) <= self.system.maintenance_capacity:
-                    #print('M{} alone in queue'.format(queue[0].m))
                     for machine in queue:
                         machine.assigned_maintenance = True
+                        if self.system.debug:
+                            print(f'Scheduler interrupting M{machine.i} processing at t={self.env.now}')
+                        machine.process.interrupt()
                 else: # len(queue) > capacity
                     # flag all next machines for maintenance
                     for machine in self.choose_next(queue):
                         machine.assigned_maintenance = True    
             
             yield self.env.timeout(1)            
+            
