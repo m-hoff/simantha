@@ -92,14 +92,14 @@ class Machine:
         self.planned_downtime = self.env.process(self.scheduled_failures())
 
         #if self.system.debug:
-        if 1:
+        if 0:
             self.env.process(self.debug_process())
                 
     def debug_process(self):
         while True:
             try:
                 if (self.i == 0):
-                    print(f't={self.env.now}', self.total_downtime)
+                    print(f't={self.env.now}', self.system.available_maintenance)
                     pass
                 yield self.env.timeout(1)
                 
@@ -172,7 +172,7 @@ class Machine:
                                 
             except simpy.Interrupt:
                 if self.system.debug and self.i == 0: 
-                    print(f'M{self.i} interrupted production at t={self.env.now}')
+                    print('  '*self.i+f'M{self.i} interrupted production at t={self.env.now}')
                 self.down = True
 
                 #self.write_failure()
@@ -190,7 +190,7 @@ class Machine:
                     yield self.env.timeout(1)
                     #if self.i == 3: print(f'M{self.i} down at t={self.env.now}')
                 if self.system.debug and self.i == 0: 
-                    print(f'M{self.i} resumed production at t={self.env.now}\n')
+                    print('  '*self.i+f'M{self.i} resumed production at t={self.env.now}\n')
 
     def maintain(self):
         #while True:
@@ -201,13 +201,16 @@ class Machine:
             #     yield self.env.timeout(1)
 
         if self.system.debug and self.i == 0: 
-            print(f'M{self.i} scheduled for maintenance at t={self.env.now}')
+            print('  '*self.i+f'M{self.i} scheduled for maintenance at t={self.env.now}')
         
         if self.repair_type == 'CBM':
             if not self.system.available_maintenance:
                 return
             if self.system.debug and self.i == 0: 
-                print(f'M{self.i} scheduled for CBM at t={self.env.now}')
+                print('  '*self.i+f'M{self.i} scheduled for CBM at t={self.env.now}')
+        elif self.repair_type == 'CM':
+            while not self.system.available_maintenance:
+                yield self.env.timeout(1)
 
         # break loop once scheduled for maintenance
         self.assigned_maintenance = False
@@ -244,13 +247,13 @@ class Machine:
                 
         maintenance_start = self.env.now
         if self.system.debug:
-            print(f'M{self.i} starting maintenance at t={self.env.now}')
+            print('  '*self.i+f'M{self.i} starting maintenance at t={self.env.now}')
 
         # generate TTR based on repair type
         if self.repair_type is not 'planned':
             self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
             if self.system.debug:
-                print(f'M{self.i} TTR={self.time_to_repair} at t={self.env.now}')
+                print('  '*self.i+f'M{self.i} TTR={self.time_to_repair} at t={self.env.now}')
             #print(f'M{self.i} TTR={self.time_to_repair}')
 
         if self.env.now + self.time_to_repair > self.system.warmup_time + self.system.sim_time:
@@ -269,7 +272,7 @@ class Machine:
             self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
         
         if self.system.debug:
-            print(f'M{self.i} repaired at t={self.env.now}')
+            print('  '*self.i+f'M{self.i} repaired at t={self.env.now}')
 
         # repairman is released
         self.maintenance_request = None                                                  
@@ -341,7 +344,7 @@ class Machine:
                 if ((self.health == self.failed_state)
                    and (not self.failed)): # machine fails
                     if self.system.debug and self.i == 0: 
-                        print(f'M{self.i} reached failure at t={self.env.now}')
+                        print('  '*self.i+f'M{self.i} reached failure at t={self.env.now}')
                     self.failed = True
                     self.repair_type = 'CM'
                     
@@ -424,7 +427,7 @@ class Machine:
         Write new failure occurence to simulation data.
         '''
         if self.system.debug:
-            print(f'Writing {self.repair_type} failure on M{self.i} at t={self.env.now}')
+            print('  '*self.i+f'Writing {self.repair_type} failure on M{self.i} at t={self.env.now}')
         if self.last_repair_time:
             TTF = self.env.now - self.last_repair_time
         else:
