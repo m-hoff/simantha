@@ -5,7 +5,7 @@ with open('README.md', 'r') as f:
 
 setuptools.setup(
     name='maintsim',
-    version='0.1.2',
+    version='0.1.3',
     author='Michael Hoffman',
     author_email='MichaelHoffman@psu.edu',
     description='Simulation of maintenance for manufacturing',
