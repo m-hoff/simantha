@@ -31,8 +31,8 @@ class Scheduler:
         n_machines_to_schedule = self.system.available_maintenance
         next_machines = []
 
-        # if self.system.debug:
-        #     print(f'Machines to schedule: {n_machines_to_schedule} at t={self.env.now}')
+        if self.system.debug:
+            print(f'Machines to schedule: {n_machines_to_schedule} at t={self.env.now}')
 
         while n_machines_to_schedule > 0:
             next_machine = queue[np.argmin([i.time_entered_queue if i.time_entered_queue else self.env.now for i in queue])]

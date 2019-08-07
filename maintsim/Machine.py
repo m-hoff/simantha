@@ -216,6 +216,8 @@ class Machine:
         self.assigned_maintenance = False
         self.request_maintenance = False
         self.under_repair = True
+        if self.system.debug:
+            print('  '*self.i+f'Interrupting M{self.i} due to repair at t={self.env.now}')
         self.failing.interrupt() # stop degradation during maintenance
         self.system.available_maintenance -= 1 # occupy one maintenance resource
 
@@ -327,6 +329,8 @@ class Machine:
                 if (self.env.now == 0) and (self.failed):
                     try:
                         self.request_maintenance = True
+                        if self.system.debug:
+                            print('  '*self.i+f'Interrupting M{self.i} processing due to failure at t={self.env.now}')
                         self.process.interrupt()
                     except:
                         pass
@@ -354,6 +358,8 @@ class Machine:
                     if (self.maintenance_policy == 'CM') or (not self.maintenance_policy):
                         self.time_entered_queue = min([self.time_entered_queue, self.env.now])
                     self.write_failure()
+                    if self.system.debug:
+                        print('  '*self.i+f'Interrupting M{self.i} due to failure at t={self.env.now}')
                     self.process.interrupt()
 
                 # TODO: validate elif here  
