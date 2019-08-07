@@ -177,8 +177,11 @@ class Machine:
                 yield self.env.process(self.maintain())
 
                 # stop production until online
-                while self.down:
-                    yield self.env.timeout(1)
+                # while self.down:
+                #     yield self.env.timeout(1)
+
+                if not self.system.allow_new_maintenance:
+                    self.degradation = np.eye(self.failed_state+1)
 
     def maintain(self):        
         if self.repair_type == 'CBM':
