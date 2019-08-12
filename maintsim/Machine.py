@@ -166,7 +166,9 @@ class Machine:
                     if self.env.now > self.system.warmup_time:
                         self.total_downtime += (self.idle_stop - self.idle_start)                        
                                 
-            except simpy.Interrupt:                
+            except simpy.Interrupt:
+                if self.system.debug and self.i == 0: 
+                    print('  '*self.i+f'M{self.i} interrupted production at t={self.env.now}')
                 self.down = True
 
                 # wait for maintenance to finish
@@ -175,11 +177,29 @@ class Machine:
                 # stop production until online
                 while self.down:
                     yield self.env.timeout(1)
+                    #if self.i == 3: print(f'M{self.i} down at t={self.env.now}')
+                if self.system.debug and self.i == 0: 
+                    print('  '*self.i+f'M{self.i} resumed production at t={self.env.now}\n')
 
-    def maintain(self):        
+    def maintain(self):
+        #while True:
+            
+            # while not self.assigned_maintenance:
+            #     # wait to be scheduled for maintenance
+            #     if self.i == 0: print(f'M{self.i} checking if due for maintenance at t={self.env.now}')
+            #     yield self.env.timeout(1)
+
+        if self.system.debug and self.i == 0: 
+            print('  '*self.i+f'M{self.i} scheduled for maintenance at t={self.env.now}')
+        
         if self.repair_type == 'CBM':
             if not self.system.available_maintenance:
-                return            
+                return
+            if self.system.debug and self.i == 0: 
+                print('  '*self.i+f'M{self.i} scheduled for CBM at t={self.env.now}')
+        elif self.repair_type == 'CM':
+            while not self.system.available_maintenance:
+                yield self.env.timeout(1)
 
         # break loop once scheduled for maintenance
         self.assigned_maintenance = False
@@ -215,10 +235,15 @@ class Machine:
         #     pass
                 
         maintenance_start = self.env.now
+        if self.system.debug:
+            print('  '*self.i+f'M{self.i} starting maintenance at t={self.env.now}')
 
         # generate TTR based on repair type
         if self.repair_type is not 'planned':
             self.time_to_repair = self.system.repair_params[self.repair_type].rvs()
+            if self.system.debug:
+                print('  '*self.i+f'M{self.i} TTR={self.time_to_repair} at t={self.env.now}')
+            #print(f'M{self.i} TTR={self.time_to_repair}')
 
         if self.env.now + self.time_to_repair > self.system.warmup_time + self.system.sim_time:
             # repair goes beyond simulation time
@@ -232,6 +257,9 @@ class Machine:
             current_queue = [f'M{machine.i}' for machine in self.system.machines if machine.request_maintenance]
             self.system.queue_data.loc[self.env.now, 'level'] = len(current_queue)
             self.system.queue_data.loc[self.env.now, 'contents'] = str(current_queue)
+        
+        if self.system.debug:
+            print('  '*self.i+f'M{self.i} repaired at t={self.env.now}')
 
         # repairman is released
         self.maintenance_request = None                                                  
@@ -301,6 +329,8 @@ class Machine:
                     
                 if ((self.health == self.failed_state)
                    and (not self.failed)): # machine fails
+                    if self.system.debug and self.i == 0: 
+                        print('  '*self.i+f'M{self.i} reached failure at t={self.env.now}')
                     self.failed = True
                     self.repair_type = 'CM'
                     
@@ -365,6 +395,8 @@ class Machine:
         '''
         Write new failure occurence to simulation data.
         '''
+        if self.system.debug:
+            print('  '*self.i+f'Writing {self.repair_type} failure on M{self.i} at t={self.env.now}')
         if self.last_repair_time:
             TTF = self.env.now - self.last_repair_time
         else:
