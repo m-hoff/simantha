@@ -3,7 +3,6 @@ import datetime
 import logging
 import time
 
-#from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -30,7 +29,6 @@ class System:
         initial_remaining_process=None,
         initial_buffer_level=None,
         
-        allow_new_failures=True,
         initial_time=None,
 
         mcts_system=False
@@ -65,7 +63,6 @@ class System:
         else:
             self.initial_buffer_level = [0] * self.n
         
-        self.allow_new_failures = allow_new_failures
         self.initial_time = initial_time
 
         # used for MCTS scheduling
@@ -127,8 +124,7 @@ class System:
                         degradation_matrix=degradation_matrix,
                         maintenance_threshold=maintenance_threshold,
                         initial_health=self.initial_health_states[i],
-                        initial_remaining_process=self.initial_remaining_process[i],
-                        allow_new_failures=self.allow_new_failures
+                        initial_remaining_process=self.initial_remaining_process[i]
                     )
                 )
             elif i == 0: # first machine
@@ -141,8 +137,7 @@ class System:
                         out_buffer=self.buffers[i],
                         degradation_matrix=degradation_matrix,
                         maintenance_threshold=maintenance_threshold,
-                        initial_health=self.initial_health_states[i],
-                        allow_new_failures=self.allow_new_failures
+                        initial_health=self.initial_health_states[i]
                     )
                 )
             elif 0 < i < self.n - 1:
@@ -156,8 +151,7 @@ class System:
                         degradation_matrix=degradation_matrix,
                         maintenance_threshold=maintenance_threshold,
                         initial_health=self.initial_health_states[i],
-                        initial_remaining_process=self.initial_remaining_process[i],
-                        allow_new_failures=self.allow_new_failures
+                        initial_remaining_process=self.initial_remaining_process[i]
                     )
                 )
             else: # i == len(cycle_times) - 1, last machine
@@ -171,8 +165,7 @@ class System:
                         degradation_matrix=degradation_matrix,
                         maintenance_threshold=maintenance_threshold,
                         initial_health=self.initial_health_states[i],
-                        initial_remaining_process=self.initial_remaining_process[i],
-                        allow_new_failures=self.allow_new_failures
+                        initial_remaining_process=self.initial_remaining_process[i]
                     )
                 )
         

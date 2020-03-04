@@ -1,3 +1,4 @@
+import random
 import time
 import warnings
 
@@ -19,7 +20,9 @@ class _Machine:
         degradation_matrix=None,
 
         initial_health=0,
-        initial_remaining_process=None
+        initial_remaining_process=None,
+
+        name=None
     ):
         #super().__init__(env, capacity)
 
@@ -44,11 +47,16 @@ class _Machine:
         self.initial_health = initial_health
         self.initial_remaining_process = initial_remaining_process
 
-    def initialize(self, env):
-        self.env = env
+        if name is None:
+            self.name = 'Machine' + str(random.randint(0,999))
+        else:
+            self.name = name
+
+    def initialize(self, system):
+        self.env = system.env
 
         # TODO: verify naming, functionality, etc. 
-        self.contents = simpy.Container(env, self.capacity)
+        self.contents = simpy.Container(self.env, self.capacity)
 
         # intialize machine attributes
         self.health = self.initial_health
@@ -60,11 +68,21 @@ class _Machine:
         # initialize performance statistics
         self.parts_made = 0
 
+        # configure routing
+        
+
+
     def production(self):
         while True:
             try:
-                # get part from upstream object
-                #TODO: assign priority to upstream objects
+                # get part from upstream buffer
+
+
+                # process part
+
+                # put part in downstream buffer
+
+                
                 for upstream_object in self.upstream:
                     if upstream_object.contents.level:
                         yield upstream_object.contents.get(1)
