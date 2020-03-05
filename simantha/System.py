@@ -1,6 +1,6 @@
 import copy
 import datetime
-import logging
+#import logging
 import time
 
 import numpy as np
@@ -8,7 +8,7 @@ import pandas as pd
 from scipy import stats
 import simpy
 
-from .Machine import *
+from .Machine import Machine
 from .Repairman import Repairman
 
 
@@ -84,7 +84,7 @@ class System:
             f'logs/simantha_{timestamp.year}-{timestamp.month}-{timestamp.day}_'
             + f'{timestamp.hour}-{timestamp.minute}-{timestamp.second}.log'
         )
-        logging.basicConfig(filename=filename, level=logging.DEBUG)
+        #logging.basicConfig(filename=filename, level=logging.DEBUG)
 
         self.env = simpy.Environment()
 

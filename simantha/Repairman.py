@@ -21,11 +21,13 @@ class Repairman:
         '''
         Returns a list of machines currently awaiting maintenance. 
         '''
-        queue = []
-        for machine in self.system.machines:
-            if (machine.in_queue) and (machine.health > 0):
-                queue.append(machine)
-        return queue
+        #queue = []
+        #for machine in self.system.machines:
+        #    if (machine.in_queue) and (machine.health > 0):
+        #        queue.append(machine)
+        #return queue
+
+        return [m for m in self.system.machines if m.in_queue]
         
 
     def schedule_maintenance(self):
@@ -35,26 +37,24 @@ class Repairman:
         queue = self.get_queue()
         
         if (len(queue) == 0) or (self.utilization == self.capacity):
-            self.update_queue_data()
+            #self.update_queue_data()
             return
         elif len(queue) == 1:
             next_machine = queue[0]
         else: # len(queue) > 1
-            next_machine = self.resolve_simultaneous_repairs()
+            next_machine = self.resolve_simultaneous_repairs(queue)
             
         self.utilization += 1
+        print(f'Choosing M{next_machine.index} for repair at t={self.env.now}')
         self.env.process(next_machine.repair())
 
 
-    def resolve_simultaneous_repairs(self):
+    def resolve_simultaneous_repairs(self, queue):
         '''
         Choose between several machines in queue. By default, FIFO is used. 
         '''
-        queue = self.get_queue()
-
-        # FIFO policy
+        # default FIFO policy
         next_machine = min(queue, key=lambda m: m.time_entered_queue)
-
         return next_machine
 
 

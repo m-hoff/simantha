@@ -112,13 +112,18 @@ class Machine:
                     #)
 
             except simpy.Interrupt:
+                print(f'Production interrupted at t={self.env.now}')
+                #self.degradation_process.interrupt()
+                self.system.repairman.schedule_maintenance()
                 if not self.repair_event.triggered:
                     yield self.repair_event # wait for repair to finish
 
                     self.repair_event = self.env.event()
                     self.degradation_process = self.env.process(self.degradation())
             
-                    self.system.repairman.schedule_maintenance()       
+                    self.system.repairman.schedule_maintenance()
+
+                print(f'Resuming production at t={self.env.now}')
 
 
     def degradation(self):
@@ -127,38 +132,41 @@ class Machine:
         entering the maintenance queue/failing. ttq_timestamp/ttf_timestamp is 
         the simulation time at which these events occur. 
         '''
-        try:
-            # get time to degrade by 1 health unit
-            time_to_degrade = self.get_time_to_degrade()
-            yield self.env.timeout(time_to_degrade)
-            self.health += 1
-
-            # check for machine failure
-            if self.health == self.failed_state:
-                self.failed = True
-                self.repair_type = 'corrective'
-                if not self.in_queue:
-                    self.time_entered_queue = self.env.now
-                    self.in_queue = True
-                self.production_process.interrupt()
-
-            # schedule for maintnance if health exceeds CBM threshold
-            elif self.health >= self.maintenance_threshold:
-                self.repair_type = 'preventive'
-                if not self.in_queue:
-                    self.time_entered_queue = self.env.now
-                    self.in_queue = True
-
-            self.system.repairman.schedule_maintenance()
-        
-        except simpy.Interrupt:
-            # degradation interrupted if maintenance is scheduled before failure
+        while True:
             try:
-                yield self.repair_event
-            except:
-                pass
+                # get time to degrade by 1 health unit
+                time_to_degrade = self.get_time_to_degrade()
+                yield self.env.timeout(time_to_degrade)
+                self.health += 1
+
+                # check for machine failure
+                if self.health == self.failed_state:
+                    print(f'M0 failed at t={self.env.now}')
+                    self.failed = True
+                    self.repair_type = 'corrective'
+                    if not self.in_queue:
+                        self.time_entered_queue = self.env.now
+                        self.in_queue = True
+                    self.production_process.interrupt()
+
+                # schedule for maintnance if health exceeds CBM threshold
+                elif self.health >= self.maintenance_threshold:
+                    self.repair_type = 'preventive'
+                    if not self.in_queue:
+                        self.time_entered_queue = self.env.now
+                        self.in_queue = True
+
+                self.system.repairman.schedule_maintenance()
+            
+            except simpy.Interrupt:
+                # degradation interrupted if maintenance is scheduled before failure
+                try:
+                    yield self.repair_event
+                except:
+                    pass
 
     def repair(self, healths=None):
+        print(f'Starting repair at t={self.env.now}')
         if healths is not None:
             for i, machine in enumerate(self.system.machines):
                 machine.health = healths[i]
@@ -166,7 +174,7 @@ class Machine:
         self.in_queue = False
         self.under_repair = True
 
-        self.system.repairman.update_queue_data()
+        #self.system.repairman.update_queue_data()
 
         #self.maintenance_request = self.system.repairman.request(priority=1)
         if self.repair_type == 'preventive':
@@ -177,28 +185,28 @@ class Machine:
             self.production_process.interrupt()
 
         # clear health data beyond this point
-        self.health_data = self.health_data[self.health_data[:,0] < self.env.now]
+        #self.health_data = self.health_data[self.health_data[:,0] < self.env.now]
 
         ttr = self.get_time_to_repair()
-        self.maintenance_data.append(
-            [self.env.now-self.system.warm_up_time, self.repair_type, ttr]
-        )
+        print(f'TTR={ttr}')
+        #self.maintenance_data.append(
+        #    [self.env.now-self.system.warm_up_time, self.repair_type, ttr]
+        #)
 
         yield self.env.timeout(ttr)
 
         self.health = 0 # machine completely restored
-        self.update_health_data(at=self.env.now)
+        #self.update_health_data(at=self.env.now)
 
         self.failed = False
         self.under_repair = False
         self.remaining_processing_time = self.cycle_time
 
-        self.ttq = -1
-        self.ttf = -1
-
         if not self.repair_event.triggered:
             self.repair_event.succeed()
         self.system.repairman.utilization -= 1 # release repairman
+
+        print(f'Repair completed at t={self.env.now}')
 
 
     def get_time_to_repair(self):
@@ -221,7 +229,10 @@ class Machine:
 
 
     def get_time_to_degrade(self):
-        if (1 in np.diagonal(self.degradation_matrix)[:-1]):
+        if self.health == self.failed_state:
+            ttd  = np.inf
+        elif self.degradation_matrix[self.health, self.health] == 1:
+            # machine will not degrade beyond the current state
             ttd = np.inf
         else:
             ttd = 0
@@ -234,57 +245,6 @@ class Machine:
                 ttd += 1
         
         return ttd
-
-
-    def get_time_to_queue(self):
-        '''
-        Generate the time until entering the maintenance queue. If the machine
-        cannot reach the failed state (according to the transition matrix), or
-        is not allowed to fail, TTQ is infininte. 
-        '''
-        if (1 in np.diagonal(self.degradation_matrix)[:-1]):
-            ttq = np.inf
-        else:
-            ttq = 0
-            while self.health < self.maintenance_threshold:
-                previous_health = self.health
-                all_states = np.arange(self.failed_state + 1)
-                #print(self.index, self.health)
-                self.health = np.random.choice(
-                    all_states, p=self.degradation_matrix[int(self.health)]
-                )
-                if self.health != previous_health:
-                    self.update_health_data(at=self.env.now+ttq)
-                ttq += 1
-
-        return ttq
-    
-    def get_time_to_failure(self):
-        '''
-        Generate the time until machine failure. If the machine cannot reach the
-        failed state (according to the transition matrix), or is not allowed to
-        fail, TTQ is infininte. 
-        '''        
-        if (
-            (1 in np.diagonal(self.degradation_matrix)[:-1])
-            or (not self.in_queue)
-        ):
-            #if self.system.debug:
-            #    print(f'M{self.index} TTF is inf')
-            ttf = np.inf
-        else:
-            ttf = 0
-            while self.health != self.failed_state:
-                previous_health = self.health
-                all_states = np.arange(self.failed_state + 1)
-                self.health = np.random.choice(
-                    all_states, p=self.degradation_matrix[int(self.health)]
-                )
-                if self.health != previous_health:
-                    self.update_health_data(at=self.env.now+ttf)
-                ttf +=1
-
-        return ttf
 
     
     def update_health_data(self, at=None):
