@@ -1,316 +1,383 @@
-import time
+import random
+import warnings
 
-import numpy as np
-from scipy import stats
-import simpy
+from .Asset import Asset
+from .simulation import *
 
-print_debug = False
-
-class Machine:    
+class Machine(Asset):
     def __init__(
-        self, 
-        env, 
-        system, 
-        index, 
-        cycle_time, 
-        in_buffer=None, 
-        out_buffer=None, 
-        degradation_matrix=np.eye(2), 
-        maintenance_threshold=999,
-        repairman=None, 
+        self,
+        name=None,
+        cycle_time=1,
+        selection_priority=1,
 
-        initial_health=0, 
+        degradation_matrix=[[1,0],[0,1]], #  by default, never degrade
+        cbm_threshold=None,
+        planned_failure=None, # an optional planned failure, in the form of (time, duration)
+
+        pm_distribution=5,
+        cm_distribution=10,
+        
+        # initial machine state
+        initial_health=0,
         initial_remaining_process=None
     ):
-        self.env = env
-        self.system = system
-        
-        self.index = index
-        
+        # user-specified parameters
+        self.name = name
         self.cycle_time = cycle_time
-        self.in_buffer = in_buffer
-        self.out_buffer = out_buffer
-        self.degradation_matrix = degradation_matrix
-        self.failed_state = degradation_matrix.shape[0] - 1
-
-        # maintenance parameters
-        self.maintenance_threshold = min(
-            [self.failed_state, maintenance_threshold]
-        )
-        
-        # production state
-        self.parts_made = 0
-        if initial_remaining_process == cycle_time:
-            self.remaining_processing_time = initial_remaining_process
-            self.has_part = False
-        elif initial_remaining_process:
-            self.remaining_processing_time = initial_remaining_process
-            self.has_part = True
+        if initial_remaining_process is not None:
+            self.initial_remaining_process = initial_remaining_process
         else:
-            self.remaining_processing_time = cycle_time
-            self.has_part = False
+            self.initial_remaining_process = cycle_time
+        self.remaining_process_time = self.initial_remaining_process
+        self.selection_priority = selection_priority
         
-        # maintenance state
+        # initial machine state
+        self.has_finished_part = False
+        self.initial_health = initial_health
         self.health = initial_health
-        self.health_data = np.array([[self.env.now, self.health]])
-        self.maintenance_state = 'healthy' # healthy, unhealthy, failed
-        
-        if self.health >= self.maintenance_threshold:
-            self.in_queue = True
+        self.degradation_matrix = degradation_matrix
+        self.failed_health = len(degradation_matrix) - 1
+        self.cbm_threshold = cbm_threshold or self.failed_health # if not specified, CM is used
+        if self.health == self.failed_health:
+            self.failed = True
         else:
-            self.in_queue = False
+            self.failed = False
+        self.assigned_maintenance = False
+        self.repairman = None
+        self.has_reserved_part = False
 
-        self.ttq = -1
-        self.ttqs = []
-        self.ttq_timestamp = -1
+        self.pm_distribution = pm_distribution
+        self.cm_distribution = cm_distribution
 
-        self.ttf = -1
-        self.ttfs = []
-        self.ttf_timestamp = -1
+        self.planned_failure = planned_failure
 
-        self.failed = False
+        # check if planned failures and degradation are specified (may cause errors)
+        if planned_failure is not None and degradation_matrix[0][0] != 1:
+            warnings.warn(
+                'Specifying planned failures along with degradtion is untested and may cause errors.'
+            )
+        
+        # routing
+        self.upstream = []
+        self.downstream = []
+        
+        # machine status
+        self.has_part = False
         self.under_repair = False
-        self.repair_type = None
-        self.time_entered_queue = np.inf
-        self.repairman = repairman
-        self.repair_event = self.env.event()
-        
-        # machine data
-        self.production_data = []
-        self.maintenance_data = []
-        
-        # main simpy processes
-        self.production_process = self.env.process(self.production())
-        self.degradation_process = self.env.process(self.degradation())
-
-    def production(self):
-        '''
-        Continuously produces parts until interrupted by repair or failure. 
-        '''
-        while True:
-            try:
-                if self.in_buffer and (not self.has_part):
-                    yield self.in_buffer.get(1)
-                    #self.update_in_buffer_data(self.env.now)
-                self.has_part = True
-                
-                while self.remaining_processing_time:
-                    # need to timeout by 1 to capture machine state
-                    yield self.env.timeout(1)
-                    self.remaining_processing_time -= 1
-                
-                if self.out_buffer:
-                    yield self.out_buffer.put(1)
-                    self.update_out_buffer_data(self.env.now)
-                self.has_part = False
-                self.remaining_processing_time = self.cycle_time
-                
-                if self.env.now >= self.system.warm_up_time:
-                    self.parts_made += 1
-                    #self.production_data.append(
-                    #    [self.env.now-self.system.warm_up_time, self.parts_made]
-                    #)
-
-            except simpy.Interrupt:
-                print(f'Production interrupted at t={self.env.now}')
-                #self.degradation_process.interrupt()
-                self.system.repairman.schedule_maintenance()
-                if not self.repair_event.triggered:
-                    yield self.repair_event # wait for repair to finish
-
-                    self.repair_event = self.env.event()
-                    self.degradation_process = self.env.process(self.degradation())
-            
-                    self.system.repairman.schedule_maintenance()
-
-                print(f'Resuming production at t={self.env.now}')
-
-
-    def degradation(self):
-        '''
-        Process for machine degradation and failure. ttq/ttf is the time until
-        entering the maintenance queue/failing. ttq_timestamp/ttf_timestamp is 
-        the simulation time at which these events occur. 
-        '''
-        while True:
-            try:
-                # get time to degrade by 1 health unit
-                time_to_degrade = self.get_time_to_degrade()
-                yield self.env.timeout(time_to_degrade)
-                self.health += 1
-
-                # check for machine failure
-                if self.health == self.failed_state:
-                    print(f'M0 failed at t={self.env.now}')
-                    self.failed = True
-                    self.repair_type = 'corrective'
-                    if not self.in_queue:
-                        self.time_entered_queue = self.env.now
-                        self.in_queue = True
-                    self.production_process.interrupt()
-
-                # schedule for maintnance if health exceeds CBM threshold
-                elif self.health >= self.maintenance_threshold:
-                    self.repair_type = 'preventive'
-                    if not self.in_queue:
-                        self.time_entered_queue = self.env.now
-                        self.in_queue = True
-
-                self.system.repairman.schedule_maintenance()
-            
-            except simpy.Interrupt:
-                # degradation interrupted if maintenance is scheduled before failure
-                try:
-                    yield self.repair_event
-                except:
-                    pass
-
-    def repair(self, healths=None):
-        print(f'Starting repair at t={self.env.now}')
-        if healths is not None:
-            for i, machine in enumerate(self.system.machines):
-                machine.health = healths[i]
-        self.system.debug=True
         self.in_queue = False
-        self.under_repair = True
+        self.remaining_ttr = None
+    
+        # machine statistics
+        self.parts_made = 0
+        self.downtime = 0
 
-        #self.system.repairman.update_queue_data()
+        # simulation data
+        self.production_data = {'time': [0], 'production': [0]}
+        self.health_data = {'time': [0], 'health': [self.health]}
+        self.maintenance_data = {'time': [], 'event': []}
 
-        #self.maintenance_request = self.system.repairman.request(priority=1)
-        if self.repair_type == 'preventive':
-            try:
-                self.degradation_process.interrupt()
-            except:
-                pass
-            self.production_process.interrupt()
+        self.part_trace = {'time': [], 'event': []}
+        
+        self.env = None
 
-        # clear health data beyond this point
-        #self.health_data = self.health_data[self.health_data[:,0] < self.env.now]
+    def initialize(self):
+        self.remaining_process_time = self.initial_remaining_process
+        self.health = self.initial_health
+        if self.health == self.failed_health:
+            self.failed = True
+        else:
+            self.failed = False
+        self.time_entered_queue = -1
 
-        ttr = self.get_time_to_repair()
-        print(f'TTR={ttr}')
-        #self.maintenance_data.append(
-        #    [self.env.now-self.system.warm_up_time, self.repair_type, ttr]
-        #)
-
-        yield self.env.timeout(ttr)
-
-        self.health = 0 # machine completely restored
-        #self.update_health_data(at=self.env.now)
-
-        self.failed = False
+        self.has_part = False
         self.under_repair = False
-        self.remaining_processing_time = self.cycle_time
+        self.in_queue = False
+        self.remaining_ttr = None
 
-        if not self.repair_event.triggered:
-            self.repair_event.succeed()
-        self.system.repairman.utilization -= 1 # release repairman
+        self.target_giver = None
+        self.target_receiver = None
 
-        print(f'Repair completed at t={self.env.now}')
+        self.blocked = False
+        self.starved = True
+        
+        # initialize statistics
+        self.parts_made = 0
+        self.downtime = 0
 
+        # schedule planned failures
+        if self.planned_failure is not None:
+            self.env.schedule_event(
+                self.planned_failure[0], self, self.maintain_planned_failure
+            )
 
-    def get_time_to_repair(self):
-        '''
-        Generate time to repair depending on repair type. 
-        '''
-        if self.get_health(self.env.now) < self.failed_state:
-            self.repair_type = 'preventive'
+        # initialize data
+        self.production_data = {'time': [0], 'production': [0]}
+        self.health_data = {'time': [0], 'health': [self.health]}
+        self.maintenance_data = {'time': [], 'event': []}
+
+        self.part_trace = {'time': [], 'event': []}        
+
+        # schedule initial events
+        time_to_degrade = self.get_time_to_degrade()
+        self.env.schedule_event(
+            time_to_degrade, self, self.degrade, f'{self.name}.initialize'
+        )
+
+    def get_part(self):
+        # Choose a random upstream container from which to take a part.
+        #candidate_givers = self.get_candidate_givers(only_free=True)
+        assert self.target_giver is not None, f'No giver identified for {self.name}'
+        #giver = random.choice(candidate_givers)
+        self.target_giver.get(1)
+
+        self.has_part = True
+
+        self.env.schedule_event(
+            self.env.now+self.cycle_time, 
+            self, 
+            self.request_space, 
+            f'{self.name}.get_part'
+        )
+
+        # check if this event unblocked another machine
+        for asset in self.target_giver.upstream:
+            if asset.can_give() and self.target_giver.can_receive():
+                source = f'{self.name}.get_part at {self.env.now}'
+                self.env.schedule_event(
+                    self.env.now, asset, asset.request_space, source
+                )
+
+        self.target_giver = None
+
+    def request_space(self):
+        self.has_finished_part = True
+        candidate_receivers = [obj for obj in self.downstream if obj.can_receive()]
+        if len(candidate_receivers) > 0:
+            self.target_receiver = random.choice(candidate_receivers)
+            self.target_receiver.reserve_vacancy(1)
+            source = f'{self.name}.request_space at {self.env.now}'
+            self.env.schedule_event(self.env.now, self, self.put_part, source)
         else:
-            self.repair_type = 'corrective'
+            self.blocked = True
+            
+    def put_part(self):
+        assert self.target_receiver is not None, f'No receiver identified for {self.name}'
 
-        if self.repair_type == 'preventive':
-            ttr = self.system.pm_distribution.rvs()
-        elif self.repair_type == 'corrective':
-            ttr = self.system.cm_distribution.rvs()
+        self.target_receiver.put(1)
+
+        self.parts_made += 1
+        self.has_finished_part = False
+        self.has_part = False
+
+        self.production_data['time'].append(self.env.now)
+        self.production_data['production'].append(self.parts_made)        
+
+        source = f'{self.name}.put_part at {self.env.now}'
+        self.env.schedule_event(self.env.now, self, self.request_part, source)
+
+        # check if this event fed another machine
+        for asset in self.target_receiver.downstream:
+            if self.target_receiver.can_give() and asset.can_receive() and not asset.has_request():
+                source = f'{self.name}.put_part at {self.env.now}'
+                self.env.schedule_event(self.env.now, asset, asset.request_part, source)
+        
+        self.target_receiver = None
+
+    def request_part(self):
+        candidate_givers = [obj for obj in self.upstream if obj.can_give()]
+        if len(candidate_givers) > 0:
+            self.starved = False
+            self.target_giver = random.choice(candidate_givers)
+            self.target_giver.reserve_content(1)
+            source = f'{self.name}.request_part at {self.env.now}'
+            self.env.schedule_event(self.env.now, self, self.get_part, source)
         else:
-            raise ValueError('Invalid repair type')
+            self.starved = True
 
-        return ttr
+    def degrade(self):
+        source = f'{self.name}.degrade at {self.env.now}'
+        self.health += 1
 
+        self.health_data['time'].append(self.env.now)
+        self.health_data['health'].append(self.health)
+
+        time_to_degrade = self.get_time_to_degrade()
+        if self.health == self.failed_health:
+            self.env.schedule_event(self.env.now, self, self.fail, source)
+        elif self.health == self.cbm_threshold:
+            self.env.schedule_event(self.env.now, self, self.enter_queue, source)
+            self.env.schedule_event(
+                self.env.now+time_to_degrade, self, self.degrade, source
+            )
+        else:
+            self.env.schedule_event(
+                self.env.now+time_to_degrade, self, self.degrade, source
+            )
+
+    def enter_queue(self):
+        if not self.in_queue:
+            self.maintenance_data['time'].append(self.env.now)
+            self.maintenance_data['event'].append('enter queue')
+
+            self.time_entered_queue = self.env.now
+            self.in_queue = True
+
+        if not self.failed and self.repairman.is_available():
+            source = f'{self.name}.enter_queue at {self.env.now}'
+            self.env.schedule_event(
+                self.env.now, self.repairman, self.repairman.inspect, source
+            )
+
+    def fail(self):
+        self.failed = True
+        self.downtime_start = self.env.now
+
+        if not self.in_queue:
+            self.enter_queue()
+
+        self.maintenance_data['time'].append(self.env.now)
+        self.maintenance_data['event'].append('failure')
+
+        self.cancel_all_events()
+
+        if self.repairman.is_available():
+            source = f'{self.name}.fail at {self.env.now}'
+            self.env.schedule_event(
+                self.env.now, self.repairman, self.repairman.inspect, source
+            )
 
     def get_time_to_degrade(self):
-        if self.health == self.failed_state:
-            ttd  = np.inf
-        elif self.degradation_matrix[self.health, self.health] == 1:
-            # machine will not degrade beyond the current state
-            ttd = np.inf
-        else:
-            ttd = 0
-            current_health = new_health = self.health
-            all_states = np.arange(self.failed_state + 1)
-            while new_health == current_health:
-                new_health = np.random.choice(
-                    all_states, p=self.degradation_matrix[int(new_health)]
-                )
-                ttd += 1
-        
+        if 1 in self.degradation_matrix[self.health]:
+            return float('inf')
+
+        ttd = 0
+        next_health = self.health
+        while next_health == self.health:
+            ttd += 1
+            next_health = random.choices(
+                population=range(self.failed_health+1),
+                weights=self.degradation_matrix[self.health],
+                k=1
+            )[0]
         return ttd
-
     
-    def update_health_data(self, at=None):
-        '''
-        Store health data of the machine including the time of each health state
-        transition. 
-        '''
-        self.health_data = self.health_data[self.health_data[:,0] < at]
+    def maintain(self):
+        if not self.failed:
+            self.downtime_start = self.env.now
+        self.has_finished_part = False
+        self.under_repair = True
 
-        self.health_data = np.append(
-            self.health_data, [[at, self.health]], axis=0
+        self.maintenance_data['time'].append(self.env.now)
+        self.maintenance_data['event'].append('begin maintenance')
+        
+        self.in_queue = False 
+        time_to_repair = self.get_time_to_repair()
+        
+        self.cancel_all_events()
+        
+        source = f'{self.name}.maintain at {self.env.now}'
+        self.env.schedule_event(self.env.now+time_to_repair, self, self.restore, source)
+
+    def maintain_planned_failure(self):
+        self.failed = True
+        self.downtime_start = self.env.now
+        self.under_repair = True
+
+        self.maintenance_data['time'].append(self.env.now)
+        self.maintenance_data['event'].append('planned failure')
+        
+        self.cancel_all_events()
+        
+        time_to_repair = self.planned_failure[1]
+        source = f'{self.name}.maintain_planned_failure at {self.env.now}'
+        self.env.schedule_event(
+            self.env.now+time_to_repair, self, self.restore, source
         )
 
+    def restore(self):
+        self.health = 0
+        self.under_repair = False
+        self.failed = False
+        self.repairman.utilization -= 1
 
-    def update_in_buffer_data(self, at=None):
-        if at in self.in_buffer.buffer_data[:,0]:
-            i = np.where(self.in_buffer.buffer_data[:,0] == at)
-            self.in_buffer.buffer_data[i] = [at, self.in_buffer.level]
+        self.downtime += (self.env.now - self.downtime_start)
+
+        self.maintenance_data['time'].append(self.env.now)
+        self.maintenance_data['event'].append('repaired')
+
+        self.health_data['time'].append(self.env.now)
+        self.health_data['health'].append(self.health)  
+
+        source = f'{self.name}.restore at {self.env.now}'
+        self.env.schedule_event(self.env.now, self, self.request_part, source)
+        time_to_degrade = self.get_time_to_degrade()
+        self.env.schedule_event(
+            self.env.now+time_to_degrade, self, self.degrade, source
+        )
+        
+        # repairman to scan queue once released
+        self.env.schedule_event(
+            self.env.now, self.repairman, self.repairman.inspect, source
+        )
+    
+    def requesting_maintenance(self):
+        return (
+            (not self.under_repair)
+            and ((self.failed) or (self.health >= self.cbm_threshold))
+            and (not self.assigned_maintenance)
+        )
+        
+    def get_time_to_repair(self):
+        if self.failed:
+            return rng(self.cm_distribution)
         else:
-            self.in_buffer.buffer_data = np.append(
-                self.in_buffer.buffer_data, 
-                [[at, self.in_buffer.level]], 
-                axis=0
-            )
+            return rng(self.pm_distribution)
+        
+    def define_routing(self, upstream=[], downstream=[]):
+        self.upstream = upstream
+        self.downstream = downstream
 
+    def can_receive(self):
+        return (
+            (not self.under_repair)
+            and (not self.failed)
+            and (not self.has_part)
+        )
 
-    def update_out_buffer_data(self, at=None):
-        if at in self.out_buffer.buffer_data[:,0]:
-            i = np.where(self.out_buffer.buffer_data[:,0] == at)
-            self.out_buffer.buffer_data[i] = [at, self.out_buffer.level]
+    def can_give(self):
+        return (
+            (self.has_finished_part)
+            and (not self.under_repair)
+            and (not self.failed)
+        ) or (
+            (self.has_finished_part)
+            and (self.downtime_start == self.env.now)
+        )
+
+    def has_request(self):
+        # check if a machine has an existing request for a part
+        for event in self.env.events:
+            if (event.location is self) and (event.action.__name__ == 'request_part'):
+                return True
+        return False
+
+    def cancel_all_events(self):
+        # cancel all events scheduled on this machine
+        for event in self.env.events:
+            if event.location == self:
+                event.canceled = True
+
+    def get_candidate_givers(self, only_free=False, blocked=False):
+        if blocked:
+            # get only candidate givers that can give a part
+            return [obj for obj in self.get_candidate_givers() if obj.blocked]
         else:
-            self.out_buffer.buffer_data = np.append(
-                self.out_buffer.buffer_data, 
-                [[at, self.out_buffer.level]], 
-                axis=0
-            )
+            return [obj for obj in self.upstream if obj.can_give()]
 
-
-    def get_health(self, time):
-        '''
-        Get the health of the machine at a specific time based on the recorded
-        health data. 
-        '''
-        try:
-            time_steps = self.health_data[:,0]
-            
-            if time in time_steps:
-                index = np.where(self.health_data[:,0] == time)[0][0]
-            else:
-                index = np.searchsorted(time_steps, time) - 1
-            return self.health_data[index, 1]
-        except:
-            return 0
-
-
-    def get_production(self, time):
-        '''
-        Get the production count of the machine at a specific time based on the 
-        recorded production data. 
-        '''
-        production_arr = np.array(self.production_data)
-        time_steps = production_arr[:,0]
-
-        if time in time_steps:
-            index = np.where(production_arr[:,0] == time)[0][0]
+    def get_candidate_receivers(self, only_free=False, starved=False):
+        if starved:
+            return [obj for obj in self.get_candidate_receivers() if obj.starved]
         else:
-            index = np.searchsorted(time_steps, time) - 1
-
-        return production_arr[index, 1]
+            # get only candidate receivers that can accept a part
+            return [obj for obj in self.downstream if obj.can_receive()]

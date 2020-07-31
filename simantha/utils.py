@@ -1,9 +1,15 @@
-import numpy as np
-
-def create_degradation_matrix(failed_state, degradation_rate=0):
-    degradation_matrix = np.eye(failed_state+1)
-    for i in range(failed_state):
-        degradation_matrix[i, i] = 1 - degradation_rate
-        degradation_matrix[i, i+1] =  degradation_rate
+def generate_degradation_matrix(p, h_max):
+    degradation_matrix = []
+    for h in range(h_max):
+        transitions = [0] * (h_max + 1)
+        transitions[h] = 1 - p
+        transitions[h+1] = p
+        degradation_matrix.append(transitions)
+    degradation_matrix.append([0]*h_max + [1])
     return degradation_matrix
-    
+
+# date constants (in minutes)
+DAY = 24 * 60
+WEEK = 7 * DAY
+MONTH = 30 * DAY
+YEAR = 365 * DAY
