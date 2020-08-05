@@ -1,9 +1,13 @@
 **/.idea/
 **/__pycache__/
 **/.ipynb_checkpoints
-*.pyc
-*.vscode/
+validation/
+logs/
 *.ipynb
+!verification.ipynb
 *.csv
 *.html
-logs/
+*.pkl
+*.pyc
+*.vscode/
+*.xlsx

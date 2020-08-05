@@ -2,7 +2,7 @@ import random
 
 from .simulation import *
 
-class Repairman:
+class Maintainer:
     # basic repairman, follows FIFO by default
     def __init__(self, name='repairman', capacity=float('inf')):
         self.name = name

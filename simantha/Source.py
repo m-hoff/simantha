@@ -30,7 +30,8 @@ class Source:
                 self.env.schedule_event(
                     self.env.now, 
                     receiver, 
-                    receiver.request_part
+                    receiver.request_part,
+                    f'{self.name}.arrival at {self.env.now}'
                 )
         
     def generate_arrival(self):

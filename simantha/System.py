@@ -8,13 +8,13 @@ from .Source import Source
 from .Sink import Sink
 from .Machine import Machine
 from .Buffer import Buffer
-from .Repairman import Repairman
+from .Maintainer import Maintainer
 
 class System:
     def __init__(
         self,
         objects=[],
-        repairman=Repairman()
+        maintainer=Maintainer()
     ):
         self.objects = objects
         self.sources = []
@@ -30,7 +30,7 @@ class System:
                 self.buffers.append(obj)
             elif type(obj) == Sink:
                 self.sinks.append(obj)
-        self.repairman = repairman
+        self.maintainer = maintainer
 
         # put machines at the front as they should be initialized first
         self.objects.sort(key=lambda obj: not isinstance(obj, Machine))
@@ -55,7 +55,7 @@ class System:
         for sink in self.sinks:
             sink.level = sink.initial_level
 
-        self.repairman.utilization = 0
+        self.maintainer.utilization = 0
 
     def simulate(
         self,
@@ -66,7 +66,7 @@ class System:
     ):
         start = time.time()
         for machine in self.machines:
-            machine.repairman = self.repairman
+            machine.maintainer = self.maintainer
 
         self.env = Environment(trace=trace)
         for obj in self.objects:
@@ -74,9 +74,9 @@ class System:
             obj.env = self.env
             obj.initialize()
 
-        self.repairman.env = self.env
-        self.repairman.system = self
-        self.repairman.utilization = 0
+        self.maintainer.env = self.env
+        self.maintainer.system = self
+        self.maintainer.utilization = 0
 
         self.env.warm_up_time = warm_up_time
 
@@ -99,8 +99,20 @@ class System:
         simulation_time=0,
         objective='production',
         verbose=True,
-        jobs=1
+        jobs=1,
+        seedseed=0
     ):
+        """Replicate multiple simulation runs for a specified system. Statistics for
+        each run will gathered after the "warm_up_time" has elapsed. Currently the
+        following statistics are gathered:
+        - Machine
+            - Production (units)
+            - Availability (proportion of time not failed or under maintenance)
+        - Sink
+            - Level (units): completed parts that have exited the system
+
+        A nested dictionary is returned with "replications" samples of each statistic.
+        """
         start = time.time()
         if jobs == 1: # run replications in series
             samples = []
@@ -117,7 +129,7 @@ class System:
             with multiprocessing.Pool(jobs) as p:
                 args = [
                     (seed, warm_up_time, simulation_time)
-                    for seed in range(replications)
+                    for seed in range(seedseed, seedseed+replications)
                 ]
                 samples = p.starmap(self.simulate_in_parallel, args)
 
@@ -129,7 +141,7 @@ class System:
         return samples
 
     def simulate_in_parallel(self, seed, warm_up_time, simulation_time):
-        seed = int(str(seed) + str(time.time()).split('.')[-1])
+        #seed = int(str(seed) + str(time.time()).split('.')[-1])
         random.seed(seed)
         
         self.simulate(warm_up_time, simulation_time, verbose=False)

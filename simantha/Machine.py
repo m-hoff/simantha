@@ -1,4 +1,5 @@
 import random
+import time
 import warnings
 
 from .Asset import Asset
@@ -44,7 +45,7 @@ class Machine(Asset):
         else:
             self.failed = False
         self.assigned_maintenance = False
-        self.repairman = None
+        self.maintainer = None
         self.has_reserved_part = False
 
         self.pm_distribution = pm_distribution
@@ -80,6 +81,19 @@ class Machine(Asset):
         self.part_trace = {'time': [], 'event': []}
         
         self.env = None
+
+        self.execution_profile = {
+            'get_part': [],
+            'request_space': [],
+            'put_part': [],
+            'request_part': [],
+            'degrade': [],
+            'enter_queue': [],
+            'fail': [],
+            'get_time_to_degrade': [],
+            'maintain': [],
+            'restore': []
+        }
 
     def initialize(self):
         self.remaining_process_time = self.initial_remaining_process
@@ -125,6 +139,7 @@ class Machine(Asset):
         )
 
     def get_part(self):
+        get_part_start = time.time()
         # Choose a random upstream container from which to take a part.
         #candidate_givers = self.get_candidate_givers(only_free=True)
         assert self.target_giver is not None, f'No giver identified for {self.name}'
@@ -150,7 +165,11 @@ class Machine(Asset):
 
         self.target_giver = None
 
+        get_part_stop = time.time()
+        self.execution_profile['get_part'].append(get_part_stop-get_part_start)
+
     def request_space(self):
+        request_space_start = time.time()
         self.has_finished_part = True
         candidate_receivers = [obj for obj in self.downstream if obj.can_receive()]
         if len(candidate_receivers) > 0:
@@ -160,8 +179,12 @@ class Machine(Asset):
             self.env.schedule_event(self.env.now, self, self.put_part, source)
         else:
             self.blocked = True
+
+        request_space_stop = time.time()
+        self.execution_profile['request_space'].append(request_space_stop-request_space_start)
             
     def put_part(self):
+        put_part_start = time.time()        
         assert self.target_receiver is not None, f'No receiver identified for {self.name}'
 
         self.target_receiver.put(1)
@@ -178,13 +201,17 @@ class Machine(Asset):
 
         # check if this event fed another machine
         for asset in self.target_receiver.downstream:
-            if self.target_receiver.can_give() and asset.can_receive() and not asset.has_request():
+            if self.target_receiver.can_give() and asset.can_receive() and not asset.has_content_request():
                 source = f'{self.name}.put_part at {self.env.now}'
                 self.env.schedule_event(self.env.now, asset, asset.request_part, source)
         
         self.target_receiver = None
 
+        put_part_stop = time.time()
+        self.execution_profile['put_part'].append(put_part_stop-put_part_start)
+
     def request_part(self):
+        request_part_start = time.time()
         candidate_givers = [obj for obj in self.upstream if obj.can_give()]
         if len(candidate_givers) > 0:
             self.starved = False
@@ -195,7 +222,11 @@ class Machine(Asset):
         else:
             self.starved = True
 
+        request_part_stop = time.time()
+        self.execution_profile['request_part'].append(request_part_stop-request_part_start)
+
     def degrade(self):
+        degrade_start = time.time()
         source = f'{self.name}.degrade at {self.env.now}'
         self.health += 1
 
@@ -214,8 +245,12 @@ class Machine(Asset):
             self.env.schedule_event(
                 self.env.now+time_to_degrade, self, self.degrade, source
             )
+        
+        degrade_stop = time.time()
+        self.execution_profile['degrade'].append(degrade_stop-degrade_start)
 
     def enter_queue(self):
+        enter_queue_start = time.time()
         if not self.in_queue:
             self.maintenance_data['time'].append(self.env.now)
             self.maintenance_data['event'].append('enter queue')
@@ -223,13 +258,16 @@ class Machine(Asset):
             self.time_entered_queue = self.env.now
             self.in_queue = True
 
-        if not self.failed and self.repairman.is_available():
+        if not self.failed and self.maintainer.is_available():
             source = f'{self.name}.enter_queue at {self.env.now}'
             self.env.schedule_event(
-                self.env.now, self.repairman, self.repairman.inspect, source
+                self.env.now, self.maintainer, self.maintainer.inspect, source
             )
+        enter_queue_stop = time.time()
+        self.execution_profile['enter_queue'].append(enter_queue_stop-enter_queue_start)
 
     def fail(self):
+        fail_start = time.time()
         self.failed = True
         self.downtime_start = self.env.now
 
@@ -241,14 +279,20 @@ class Machine(Asset):
 
         self.cancel_all_events()
 
-        if self.repairman.is_available():
+        if self.maintainer.is_available():
             source = f'{self.name}.fail at {self.env.now}'
             self.env.schedule_event(
-                self.env.now, self.repairman, self.repairman.inspect, source
+                self.env.now, self.maintainer, self.maintainer.inspect, source
             )
+        
+        fail_stop = time.time()
+        self.execution_profile['fail'].append(fail_stop-fail_start)
 
     def get_time_to_degrade(self):
+        ttd_start = time.time()
         if 1 in self.degradation_matrix[self.health]:
+            ttd_stop = time.time()
+            self.execution_profile['get_time_to_degrade'].append(ttd_stop-ttd_start)
             return float('inf')
 
         ttd = 0
@@ -260,9 +304,12 @@ class Machine(Asset):
                 weights=self.degradation_matrix[self.health],
                 k=1
             )[0]
+        ttd_stop = time.time()
+        self.execution_profile['get_time_to_degrade'].append(ttd_stop-ttd_start)
         return ttd
     
     def maintain(self):
+        maintain_start = time.time()
         if not self.failed:
             self.downtime_start = self.env.now
         self.has_finished_part = False
@@ -278,6 +325,8 @@ class Machine(Asset):
         
         source = f'{self.name}.maintain at {self.env.now}'
         self.env.schedule_event(self.env.now+time_to_repair, self, self.restore, source)
+        maintain_stop = time.time()
+        self.execution_profile['maintain'].append(maintain_stop-maintain_start)
 
     def maintain_planned_failure(self):
         self.failed = True
@@ -296,10 +345,11 @@ class Machine(Asset):
         )
 
     def restore(self):
+        restore_start = time.time()
         self.health = 0
         self.under_repair = False
         self.failed = False
-        self.repairman.utilization -= 1
+        self.maintainer.utilization -= 1
 
         self.downtime += (self.env.now - self.downtime_start)
 
@@ -318,8 +368,10 @@ class Machine(Asset):
         
         # repairman to scan queue once released
         self.env.schedule_event(
-            self.env.now, self.repairman, self.repairman.inspect, source
+            self.env.now, self.maintainer, self.maintainer.inspect, source
         )
+        restore_stop = time.time()
+        self.execution_profile['restore'].append(restore_stop-restore_start)
     
     def requesting_maintenance(self):
         return (
@@ -355,10 +407,19 @@ class Machine(Asset):
             and (self.downtime_start == self.env.now)
         )
 
-    def has_request(self):
+    def has_content_request(self):
         # check if a machine has an existing request for a part
         for event in self.env.events:
-            if (event.location is self) and (event.action.__name__ == 'request_part'):
+            if (
+                ((event.location is self) and (event.action.__name__ == 'request_part'))
+                or ((event.location is self) and (event.action.__name__ == 'get_part'))
+            ):
+                return True
+        return False
+
+    def has_vacancy_request(self):
+        for event in self.env.events:
+            if (event.location is self) and (event.action.__name__ == 'request_space'):
                 return True
         return False
 
