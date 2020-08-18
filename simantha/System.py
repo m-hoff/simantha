@@ -62,13 +62,14 @@ class System:
         warm_up_time=0,
         simulation_time=0,
         verbose=True,
-        trace=False
+        trace=False,
+        collect_data=True
     ):
         start = time.time()
         for machine in self.machines:
             machine.maintainer = self.maintainer
 
-        self.env = Environment(trace=trace)
+        self.env = Environment(trace=trace, collect_data=collect_data)
         for obj in self.objects:
             # should initialize machines first
             obj.env = self.env
@@ -144,7 +145,7 @@ class System:
         #seed = int(str(seed) + str(time.time()).split('.')[-1])
         random.seed(seed)
         
-        self.simulate(warm_up_time, simulation_time, verbose=False)
+        self.simulate(warm_up_time, simulation_time, verbose=False, collect_data=False)
 
         availability = [
             (1 - machine.downtime/(warm_up_time+simulation_time)) 

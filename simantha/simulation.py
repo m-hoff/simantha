@@ -39,7 +39,7 @@ class Environment:
     #     event: priority for priority, event in enumerate(event_priority)
     # }
 
-    def __init__(self, name='environment', trace=False):
+    def __init__(self, name='environment', trace=False, collect_data=True):
         self.events = []
         self.name = name
         self.now = 0
@@ -58,12 +58,14 @@ class Environment:
                 'index': []
             }
 
-        self.execution_profile = {
-            'step': 0,
-            'next_event': 0,
-            'event_execute': 0,
-            'event_clean': 0
-        }
+        self.collect_data = collect_data
+
+        # self.execution_profile = {
+        #     'step': 0,
+        #     'next_event': 0,
+        #     'event_execute': 0,
+        #     'event_clean': 0
+        # }
 
     def run(self, until):
         """Simulate the system for the specified run time or until no simulation events
@@ -88,28 +90,17 @@ class Environment:
         executed in order according to their event type priority, then their
         user-assigned priority. If these values are equal then ties are broken randomly. 
         """
-        step_start = time.time()
-        next_event_start = time.time()
+        # step_start = time.time()
+        # next_event_start = time.time()
 
-        # next_event = min(
-        #     self.events, 
-        #     key=lambda ev: (
-        #         (
-        #             ev.time, 
-        #             self.event_priority[ev.action.__name__], 
-        #             ev.priority, 
-        #             random.random()
-        #         )
-        #     )
-        # )
         next_event = self.events.pop(0)
 
-        next_event_stop = time.time()
-        self.execution_profile['next_event'] += (next_event_stop - next_event_start)
+        #next_event_stop = time.time()
+        #self.execution_profile['next_event'] += (next_event_stop - next_event_start)
 
         self.now = next_event.time
 
-        event_execute_start = time.time()
+        #event_execute_start = time.time()
 
         try:
             if self.trace:
@@ -124,26 +115,23 @@ class Environment:
             print(f'  priority: {next_event.priority}')
             sys.exit()
 
-        event_execute_stop = time.time()
-        self.execution_profile['event_execute'] += (event_execute_stop - event_execute_start)
+        # event_execute_stop = time.time()
+        # self.execution_profile['event_execute'] += (event_execute_stop - event_execute_start)
 
-        event_clean_start = time.time()
-        #self.events = [ev for ev in self.events if not ev.executed]
-        event_clean_stop = time.time()
-        self.execution_profile['event_clean'] += (event_clean_stop - event_clean_start)
+        # event_clean_start = time.time()
+        # #self.events = [ev for ev in self.events if not ev.executed]
+        # event_clean_stop = time.time()
+        # self.execution_profile['event_clean'] += (event_clean_stop - event_clean_start)
 
-        step_stop = time.time()
-        self.execution_profile['step'] += (step_stop - step_start)
+        # step_stop = time.time()
+        # self.execution_profile['step'] += (step_stop - step_start)
 
     def schedule_event(self, time, location, action, source='', priority=0):
         new_event = Event(time, location, action, source, priority)
         bisect.insort(self.events, new_event)
-        #self.events.append(new_event)
 
     def terminate(self):
-        self.events = []
         self.terminated = True
-        return
 
     def trace_event(self, event):
         if self.trace:

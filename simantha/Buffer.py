@@ -17,7 +17,8 @@ class Buffer:
         self.reserved_content = 0
         self.reserved_vacancy = 0
 
-        self.level_data = {'time': [0], 'level': [self.initial_level]}
+        if self.env.collect_data:
+            self.level_data = {'time': [0], 'level': [self.initial_level]}
 
     def can_get_part(self):
         return self.level + self.reserved_vacancy < self.capacity
@@ -30,8 +31,9 @@ class Buffer:
             self.level -= quantity
             self.reserved_content -= quantity
 
-            self.level_data['time'].append(self.env.now)
-            self.level_data['level'].append(self.level)
+            if self.env.collect_data:
+                self.level_data['time'].append(self.env.now)
+                self.level_data['level'].append(self.level)
 
         else:
             raise RuntimeError('Attempting to take more parts than available.')
@@ -44,8 +46,9 @@ class Buffer:
             self.level += quantity
             self.reserved_vacancy -= 1
 
-            self.level_data['time'].append(self.env.now)
-            self.level_data['level'].append(self.level)
+            if self.env.collect_data:
+                self.level_data['time'].append(self.env.now)
+                self.level_data['level'].append(self.level)
 
         else:
             raise RuntimeError('Attempting to put part in full buffer.')
