@@ -26,9 +26,9 @@ class Maintainer:
             # No available capacity and/or empty queue
             return
         else:
-            self.utilization += 1
-
             machine = self.choose_maintenance_action(current_queue)
+            self.utilization += 1
+            machine.in_queue = False
             machine.under_repair = True
             source = f'{self.name}.inspect at {self.env.now}'
             self.env.schedule_event(self.env.now, machine, machine.maintain, source)

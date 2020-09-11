@@ -98,7 +98,6 @@ class System:
         replications, 
         warm_up_time=0, 
         simulation_time=0,
-        objective='production',
         verbose=True,
         jobs=1,
         seedseed=0
@@ -114,26 +113,13 @@ class System:
 
         A nested dictionary is returned with "replications" samples of each statistic.
         """
-        start = time.time()
-        if jobs == 1: # run replications in series
-            samples = []
-            for i in range(replications):
-                seed = int(str(i) + str(time.time()).split('.')[-1])
-                random.seed(seed)
-                self.simulate(warm_up_time, simulation_time, verbose=False)
-                if objective == 'production':
-                    samples.append(sum([sink.level for sink in self.sinks]))
-                else:
-                    raise NotImplementedError(f'Objective {objective} is not implemented')
-
-        else: # run replications in parallel            
-            with multiprocessing.Pool(jobs) as p:
-                args = [
-                    (seed, warm_up_time, simulation_time)
-                    for seed in range(seedseed, seedseed+replications)
-                ]
-                samples = p.starmap(self.simulate_in_parallel, args)
-
+        start = time.time()      
+        with multiprocessing.Pool(jobs) as p:
+            args = [
+                (seed, warm_up_time, simulation_time)
+                for seed in range(seedseed, seedseed+replications)
+            ]
+            samples = p.starmap(self.simulate_in_parallel, args)
         stop = time.time()
 
         if verbose:

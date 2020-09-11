@@ -282,7 +282,6 @@ class Machine(Asset):
 
         if self.maintainer.is_available():
             source = f'{self.name}.fail at {self.env.now}'
-            print(f'Scheduling inspection: {self.env.now}, {self.maintainer.name}, {source}')
             self.env.schedule_event(
                 self.env.now, self.maintainer, self.maintainer.inspect, source
             )
@@ -355,7 +354,6 @@ class Machine(Asset):
         self.failed = False
         
         self.maintainer.utilization -= 1
-        print(f'{self.name} releasing maintainer at t={self.env.now}, util: {self.maintainer.utilization}, id: {id(self.maintainer)}')
 
         self.downtime += (self.env.now - self.downtime_start)
 
