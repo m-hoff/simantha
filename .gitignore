@@ -3,11 +3,15 @@
 **/.ipynb_checkpoints
 validation/
 logs/
+simenv/
+
+setup.py
+
 *.ipynb
-!verification.ipynb
 *.csv
 *.html
 *.pkl
 *.pyc
+*.txt
 *.vscode/
-*.xlsx
+*.xlsx 
