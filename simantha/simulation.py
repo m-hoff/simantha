@@ -10,34 +10,6 @@ class Environment:
     general simulation engine. In general, users of Simantha should not need to
     instantiate an Environment object.
     """
-    # Tie-breaking priority list for simultaneous events. See Chapter 3 Mathematical 
-    # Modeling of Production Systems in Production Systems Engineering by Li and Meerkov
-    # for details regarding the assumed behavior of machine/buffer interaction. Events
-    # with a smaller priority value are executed earlier.
-    # event_priority = [
-    #     # Events at the end of the last time step
-    #     'generate_arrival',
-    #     'request_space',
-    #     'put_part',
-    #     'restore',
-
-    #     # Events at the start of the current time step
-    #     'maintain_planned_failure',
-    #     'degrade',
-    #     'enter_queue',
-    #     'fail',
-    #     'inspect',
-    #     'maintain',
-    #     'request_part',
-    #     'get_part',
-
-    #     # Simulation runtime events
-    #     'terminate'
-    # ]
-
-    # event_priority = {
-    #     event: priority for priority, event in enumerate(event_priority)
-    # }
 
     def __init__(self, name='environment', trace=False, collect_data=True):
         self.events = []
@@ -59,13 +31,6 @@ class Environment:
             }
 
         self.collect_data = collect_data
-
-        # self.execution_profile = {
-        #     'step': 0,
-        #     'next_event': 0,
-        #     'event_execute': 0,
-        #     'event_clean': 0
-        # }
 
     def run(self, until):
         """Simulate the system for the specified run time or until no simulation events
@@ -90,17 +55,9 @@ class Environment:
         executed in order according to their event type priority, then their
         user-assigned priority. If these values are equal then ties are broken randomly. 
         """
-        # step_start = time.time()
-        # next_event_start = time.time()
-
         next_event = self.events.pop(0)
 
-        #next_event_stop = time.time()
-        #self.execution_profile['next_event'] += (next_event_stop - next_event_start)
-
         self.now = next_event.time
-
-        #event_execute_start = time.time()
 
         try:
             if self.trace:
@@ -114,17 +71,6 @@ class Environment:
             print(f'  action:   {next_event.action.__name__}')
             print(f'  priority: {next_event.priority}')
             sys.exit()
-
-        # event_execute_stop = time.time()
-        # self.execution_profile['event_execute'] += (event_execute_stop - event_execute_start)
-
-        # event_clean_start = time.time()
-        # #self.events = [ev for ev in self.events if not ev.executed]
-        # event_clean_stop = time.time()
-        # self.execution_profile['event_clean'] += (event_clean_stop - event_clean_start)
-
-        # step_stop = time.time()
-        # self.execution_profile['step'] += (step_stop - step_start)
 
     def schedule_event(self, time, location, action, source='', priority=0):
         new_event = Event(time, location, action, source, priority)
@@ -220,3 +166,42 @@ def rng(dist):
         return random.randrange(a, b+1)
     else:
         raise NotImplementedError(f'Invalid distribution specified: {dist}')
+
+class Distribution:
+    """
+    A class for random number generation in Simantha. Several built-in distributions are
+    available, but any class that returns a single integer value via a `sample` method
+    can be used. The built-in distributions are discrete uniform, specified by passing
+    {'uniform': [a, b]} to the distribution object, and geometric, specified via
+    {'geometric': p}. Constant integer values are also permitted. 
+    """
+    def __init__(self, distribution):
+        if type(distribution) == int:
+            self.distribution_type = 'constant'
+            self.distribution_parameters = distribution
+        elif type(distribution) != dict:
+            raise ValueError(f'Invalid distribution {distribution}. Distribution should be a dictionary')
+        elif len(distribution) > 1:
+            raise ValueError(f'Invalid distribution {distribution}. Too many dictionary members')
+        else:
+            for distribution_type, distribution_parameters in distribution.items():
+                self.distribution_type = distribution_type
+                self.distribution_parameters = distribution_parameters
+
+    def sample(self):
+        """Returns a single sample from the specified distribution."""
+        if self.distribution_type == 'constant':
+            return self.distribution_parameters
+
+        elif self.distribution_type == 'uniform':
+            a, b = self.distribution_parameters
+            return random.randint(a, b)
+
+        elif self.distribution_type == 'geometric':
+            # Returns the number of trials needed to achieve a single success, where the
+            # probability of success for each trial is p.
+            p = self.distribution_parameters
+            s = 1
+            while random.random() > p:
+                s += 1
+            return s

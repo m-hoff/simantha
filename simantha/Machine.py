@@ -25,11 +25,15 @@ class Machine(Asset):
     ):
         # user-specified parameters
         self.name = name
-        self.cycle_time = cycle_time
+        
+        self.cycle_time = Distribution(cycle_time)
+        
+        #self.cycle_time = cycle_time
         if initial_remaining_process is not None:
             self.initial_remaining_process = initial_remaining_process
         else:
-            self.initial_remaining_process = cycle_time
+            self.initial_remaining_process = self.get_cycle_time()
+            #self.initial_remaining_process = cycle_time
         self.remaining_process_time = self.initial_remaining_process
         self.selection_priority = selection_priority
         
@@ -146,7 +150,8 @@ class Machine(Asset):
         self.has_part = True
 
         self.env.schedule_event(
-            self.env.now+self.cycle_time, 
+            self.env.now+self.get_cycle_time(),
+            #self.env.now+self.cycle_time, 
             self, 
             self.request_space, 
             f'{self.name}.get_part'
@@ -288,6 +293,9 @@ class Machine(Asset):
         
         #fail_stop = time.time()
         #self.execution_profile['fail'].append(fail_stop-fail_start)
+
+    def get_cycle_time(self):
+        return self.cycle_time.sample()
 
     def get_time_to_degrade(self):
         #ttd_start = time.time()
