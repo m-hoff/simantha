@@ -28,12 +28,10 @@ class Machine(Asset):
         
         self.cycle_time = Distribution(cycle_time)
         
-        #self.cycle_time = cycle_time
         if initial_remaining_process is not None:
             self.initial_remaining_process = initial_remaining_process
         else:
             self.initial_remaining_process = self.get_cycle_time()
-            #self.initial_remaining_process = cycle_time
         self.remaining_process_time = self.initial_remaining_process
         self.selection_priority = selection_priority
         
@@ -52,8 +50,8 @@ class Machine(Asset):
         self.maintainer = None
         self.has_reserved_part = False
 
-        self.pm_distribution = pm_distribution
-        self.cm_distribution = cm_distribution
+        self.pm_distribution = Distribution(pm_distribution)
+        self.cm_distribution = Distribution(cm_distribution)
 
         self.planned_failure = planned_failure
 
@@ -83,19 +81,6 @@ class Machine(Asset):
         self.maintenance_data = {'time': [], 'event': []}
         
         self.env = None
-
-        # self.execution_profile = {
-        #     'get_part': [],
-        #     'request_space': [],
-        #     'put_part': [],
-        #     'request_part': [],
-        #     'degrade': [],
-        #     'enter_queue': [],
-        #     'fail': [],
-        #     'get_time_to_degrade': [],
-        #     'maintain': [],
-        #     'restore': []
-        # }
 
     def initialize(self):
         self.remaining_process_time = self.initial_remaining_process
@@ -140,18 +125,14 @@ class Machine(Asset):
         )
 
     def get_part(self):
-        #get_part_start = time.time()
         # Choose a random upstream container from which to take a part.
-        #candidate_givers = self.get_candidate_givers(only_free=True)
         assert self.target_giver is not None, f'No giver identified for {self.name}'
-        #giver = random.choice(candidate_givers)
         self.target_giver.get(1)
 
         self.has_part = True
 
         self.env.schedule_event(
             self.env.now+self.get_cycle_time(),
-            #self.env.now+self.cycle_time, 
             self, 
             self.request_space, 
             f'{self.name}.get_part'
@@ -167,9 +148,6 @@ class Machine(Asset):
 
         self.target_giver = None
 
-        # get_part_stop = time.time()
-        # self.execution_profile['get_part'].append(get_part_stop-get_part_start)
-
     def request_space(self):
         #request_space_start = time.time()
         self.has_finished_part = True
@@ -181,12 +159,8 @@ class Machine(Asset):
             self.env.schedule_event(self.env.now, self, self.put_part, source)
         else:
             self.blocked = True
-
-        #request_space_stop = time.time()
-        #self.execution_profile['request_space'].append(request_space_stop-request_space_start)
             
     def put_part(self):
-        #put_part_start = time.time()        
         assert self.target_receiver is not None, f'No receiver identified for {self.name}'
 
         self.target_receiver.put(1)
@@ -210,11 +184,7 @@ class Machine(Asset):
         
         self.target_receiver = None
 
-        # put_part_stop = time.time()
-        # self.execution_profile['put_part'].append(put_part_stop-put_part_start)
-
     def request_part(self):
-        #request_part_start = time.time()
         candidate_givers = [obj for obj in self.upstream if obj.can_give()]
         if len(candidate_givers) > 0:
             self.starved = False
@@ -225,11 +195,7 @@ class Machine(Asset):
         else:
             self.starved = True
 
-        #request_part_stop = time.time()
-        #self.execution_profile['request_part'].append(request_part_stop-request_part_start)
-
     def degrade(self):
-        #degrade_start = time.time()
         source = f'{self.name}.degrade at {self.env.now}'
         self.health += 1
 
@@ -249,12 +215,8 @@ class Machine(Asset):
             self.env.schedule_event(
                 self.env.now+time_to_degrade, self, self.degrade, source
             )
-        
-        #degrade_stop = time.time()
-        #self.execution_profile['degrade'].append(degrade_stop-degrade_start)
 
     def enter_queue(self):
-        #enter_queue_start = time.time()
         if not self.in_queue:
             if self.env.collect_data:
                 self.maintenance_data['time'].append(self.env.now)
@@ -268,11 +230,8 @@ class Machine(Asset):
             self.env.schedule_event(
                 self.env.now, self.maintainer, self.maintainer.inspect, source
             )
-        #enter_queue_stop = time.time()
-        #self.execution_profile['enter_queue'].append(enter_queue_stop-enter_queue_start)
 
     def fail(self):
-        #fail_start = time.time()
         self.failed = True
         self.downtime_start = self.env.now
 
@@ -290,18 +249,12 @@ class Machine(Asset):
             self.env.schedule_event(
                 self.env.now, self.maintainer, self.maintainer.inspect, source
             )
-        
-        #fail_stop = time.time()
-        #self.execution_profile['fail'].append(fail_stop-fail_start)
 
     def get_cycle_time(self):
-        return self.cycle_time.sample()
+        return self.cycle_time.sample() 
 
     def get_time_to_degrade(self):
-        #ttd_start = time.time()
         if 1 in self.degradation_matrix[self.health]:
-            #ttd_stop = time.time()
-            #self.execution_profile['get_time_to_degrade'].append(ttd_stop-ttd_start)
             return float('inf')
 
         ttd = 0
@@ -313,12 +266,9 @@ class Machine(Asset):
                 weights=self.degradation_matrix[self.health],
                 k=1
             )[0]
-        #ttd_stop = time.time()
-        #self.execution_profile['get_time_to_degrade'].append(ttd_stop-ttd_start)
         return ttd
     
     def maintain(self):
-        #maintain_start = time.time()
         if not self.failed:
             self.downtime_start = self.env.now
         self.has_finished_part = False
@@ -335,8 +285,6 @@ class Machine(Asset):
         
         source = f'{self.name}.maintain at {self.env.now}'
         self.env.schedule_event(self.env.now+time_to_repair, self, self.restore, source)
-        #maintain_stop = time.time()
-        #self.execution_profile['maintain'].append(maintain_stop-maintain_start)
 
     def maintain_planned_failure(self):
         self.failed = True
@@ -356,7 +304,6 @@ class Machine(Asset):
         )
 
     def restore(self):
-        #restore_start = time.time()
         self.health = 0
         self.under_repair = False
         self.failed = False
@@ -379,12 +326,10 @@ class Machine(Asset):
             self.env.now+time_to_degrade, self, self.degrade, source
         )
         
-        # repairman to scan queue once released
+        # Repairman to scan queue once released
         self.env.schedule_event(
             self.env.now, self.maintainer, self.maintainer.inspect, source
         )
-        #restore_stop = time.time()
-        #self.execution_profile['restore'].append(restore_stop-restore_start)
     
     def requesting_maintenance(self):
         return (
@@ -395,9 +340,9 @@ class Machine(Asset):
         
     def get_time_to_repair(self):
         if self.failed:
-            return rng(self.cm_distribution)
+            return self.cm_distribution.sample()
         else:
-            return rng(self.pm_distribution)
+            return self.pm_distribution.sample()
         
     def define_routing(self, upstream=[], downstream=[]):
         self.upstream = upstream

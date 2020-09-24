@@ -128,8 +128,8 @@ class System:
         return samples
 
     def simulate_in_parallel(self, seed, warm_up_time, simulation_time):
-        #seed = int(str(seed) + str(time.time()).split('.')[-1])
-        random.seed(seed)
+        #random.seed(seed)
+        random.seed()
         
         self.simulate(warm_up_time, simulation_time, verbose=False, collect_data=False)
 
