@@ -1,3 +1,4 @@
+import copy
 import multiprocessing
 import random
 import time
@@ -98,6 +99,7 @@ class System:
         replications, 
         warm_up_time=0, 
         simulation_time=0,
+        store_system_state=False,
         verbose=True,
         jobs=1,
         seedseed=0
@@ -116,7 +118,7 @@ class System:
         start = time.time()      
         with multiprocessing.Pool(jobs) as p:
             args = [
-                (seed, warm_up_time, simulation_time)
+                (seed, warm_up_time, simulation_time, store_system_state)
                 for seed in range(seedseed, seedseed+replications)
             ]
             samples = p.starmap(self.simulate_in_parallel, args)
@@ -127,11 +129,21 @@ class System:
         
         return samples
 
-    def simulate_in_parallel(self, seed, warm_up_time, simulation_time):
-        #random.seed(seed)
+    def simulate_in_parallel(
+        self, 
+        seed, 
+        warm_up_time, 
+        simulation_time, 
+        store_system_state=False
+    ):
         random.seed()
         
-        self.simulate(warm_up_time, simulation_time, verbose=False, collect_data=False)
+        self.simulate(
+            warm_up_time, 
+            simulation_time, 
+            verbose=False, 
+            collect_data=store_system_state
+        )
 
         availability = [
             (1 - machine.downtime/(warm_up_time+simulation_time)) 
@@ -142,4 +154,14 @@ class System:
 
         system_production = sum([sink.level for sink in self.sinks])
 
-        return (system_production, machine_production, availability)
+        if store_system_state:
+            system_state = copy.deepcopy(self)
+        else:
+            system_state = None
+
+        return (
+            system_production, 
+            machine_production, 
+            availability, 
+            system_state
+        )
