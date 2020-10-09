@@ -1,6 +1,20 @@
 import unittest
 
 from simantha import Source, Machine, Buffer, Sink, System, utils
+import simantha.simulation
+
+class SimulationTests(unittest.TestCase):
+    """Tests for the underlying simulation engine. 
+    """
+    def test_event_scheduling(self):
+        # Test scheduling a new event in an empty environment
+        env = simantha.simulation.Environment()
+        new_event = {'time': 0, 'location': None, 'action': None}
+        env.schedule_event(**new_event)
+
+        self.assertEqual(len(env.events), 1)
+
+    
 
 class SingleMachineTests(unittest.TestCase):
     """Basic simulation behavior of a single machine.

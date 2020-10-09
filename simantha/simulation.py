@@ -10,7 +10,6 @@ class Environment:
     general simulation engine. In general, users of Simantha should not need to
     instantiate an Environment object.
     """
-
     def __init__(self, name='environment', trace=False, collect_data=True):
         self.events = []
         self.name = name
@@ -180,13 +179,26 @@ class Distribution:
             self.distribution_type = 'constant'
             self.distribution_parameters = distribution
         elif type(distribution) != dict:
-            raise ValueError(f'Invalid distribution {distribution}. Distribution should be a dictionary')
+            raise ValueError(
+        f'Invalid distribution {distribution}. Distribution should be a dictionary'
+        )
         elif len(distribution) > 1:
-            raise ValueError(f'Invalid distribution {distribution}. Too many dictionary members')
+            raise ValueError(
+        f'Invalid distribution {distribution}. Too many dictionary members'
+        )
         else:
             for distribution_type, distribution_parameters in distribution.items():
                 self.distribution_type = distribution_type
                 self.distribution_parameters = distribution_parameters
+
+        if self.distribution_type == 'constant':
+            self.mean = self.distribution_parameters
+        elif self.distribution_type == 'uniform':
+            self.mean = sum(self.distribution_parameters) / 2
+        elif self.distribution_type == 'geometric':
+            self.mean = 1 / self.distribution_parameters
+        else:
+            self.mean = None
 
     def sample(self):
         """Returns a single sample from the specified distribution."""
