@@ -15,3 +15,5 @@ setup.py
 *.txt
 *.vscode/
 *.xlsx 
+
+!requirements.txt

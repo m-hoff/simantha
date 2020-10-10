@@ -165,11 +165,12 @@ class Machine(Asset):
 
         self.target_receiver.put(1)
 
-        self.parts_made += 1
+        if self.env.now > self.env.warm_up_time:
+            self.parts_made += 1
         self.has_finished_part = False
         self.has_part = False
 
-        if self.env.collect_data:
+        if self.env.now > self.env.warm_up_time and self.env.collect_data:
             self.production_data['time'].append(self.env.now)
             self.production_data['production'].append(self.parts_made)        
 

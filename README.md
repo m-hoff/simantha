@@ -6,7 +6,7 @@ Simantha uses discrete event simulation to model the behavior of discrete manufa
 
 ### Requirements
 
-Simantha requires Python &ge; 3.6
+Simantha requires Python &ge; 3.6 and [SciPy](https://www.scipy.org/) &ge; 1.5.2 for running tests.
 
 ### Setting up a manufacturing system
 

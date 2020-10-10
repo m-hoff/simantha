@@ -80,9 +80,10 @@ class System:
         self.maintainer.system = self
         self.maintainer.utilization = 0
 
-        self.env.warm_up_time = warm_up_time
+        self.warm_up_time = warm_up_time
+        self.simulation_time = simulation_time
 
-        self.env.run(until=warm_up_time+simulation_time)
+        self.env.run(warm_up_time, simulation_time)
 
         # clean up data here
         for machine in self.machines:

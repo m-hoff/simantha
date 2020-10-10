@@ -31,13 +31,15 @@ class Environment:
 
         self.collect_data = collect_data
 
-    def run(self, until):
+    def run(self, warm_up_time=0, simulation_time=0):
         """Simulate the system for the specified run time or until no simulation events
         remain. 
         """
         self.now = 0
+        self.warm_up_time = warm_up_time
+        self.simulation_time = simulation_time
         self.terminated = False
-        self.events.append(Event(until, self, self.terminate))
+        self.events.append(Event(warm_up_time+simulation_time, self, self.terminate))
         self.event_index = 0
 
         self.events.sort()
@@ -95,7 +97,7 @@ class Environment:
             trace_file.close()
 
 class Event:
-    event_priority = [
+    action_priority = [
         # Events at the end of the last time step
         'generate_arrival',
         'request_space',
@@ -116,8 +118,8 @@ class Event:
         'terminate'
     ]
 
-    event_priority = {
-        event: priority for priority, event in enumerate(event_priority)
+    action_priority = {
+        action: priority for priority, action in enumerate(action_priority)
     }
 
     def __init__(self, time, location, action, source='', priority=0, status=''):
@@ -132,6 +134,12 @@ class Event:
 
         self.canceled = False
         self.executed = False
+    
+    def get_action_priority(self):
+        if self.action.__name__ in self.action_priority.keys():
+            return self.action_priority[self.action.__name__]
+        else:
+            return float('inf')
 
     def execute(self):
         if not self.canceled:
@@ -143,12 +151,14 @@ class Event:
     def __lt__(self, other):
         return (
             self.time, 
-            self.event_priority[self.action.__name__], 
+            #self.action_priority[self.action.__name__], 
+            self.get_action_priority(),
             self.priority, 
             self.tiebreak
         ) < (
             other.time, 
-            other.event_priority[other.action.__name__], 
+            #other.event_priority[other.action.__name__], 
+            other.get_action_priority(),
             other.priority, 
             other.tiebreak
         )
