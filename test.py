@@ -7,6 +7,16 @@ from simantha import Source, Machine, Buffer, Sink, System
 import simantha.simulation
 import simantha.utils
 
+# Degradation transition matrix used for all tests where applicable
+degradation_matrix = [
+            [0.9, 0.1, 0,   0,   0,   0  ],
+            [0,   0.9, 0.1, 0,   0,   0  ],
+            [0,   0,   0.9, 0.1, 0,   0  ],
+            [0,   0,   0,   0.9, 0.1, 0  ],
+            [0,   0,   0,   0,   0.9, 0.1],
+            [0,   0,   0,   0,   0,   1  ]
+        ]
+
 class UtilsTests(unittest.TestCase):
     """Test Simantha utility functons.
     """
@@ -20,7 +30,11 @@ class UtilsTests(unittest.TestCase):
             [0,   0,   0,   0,   0.9, 0.1],
             [0,   0,   0,   0,   0,   1  ]
         ]
-        self.assertEqual(degradation_matrix, target_matrix)
+        #self.assertEqual(degradation_matrix, target_matrix)
+        self.assertEqual(
+            simantha.utils.generate_degradation_matrix(p=0.1, h_max=5), 
+            degradation_matrix
+        )
 
 class SimulationTests(unittest.TestCase):
     """Tests for the underlying simulation engine. 
@@ -69,6 +83,7 @@ class SimulationTests(unittest.TestCase):
         uniform = simantha.simulation.Distribution({'uniform': [low, high]})
         rvs = [uniform.sample() for _ in range(1000)]
 
+        # H_0: The sample is drawn from the specified distribution
         _, p_value = scipy.stats.kstest(rvs, scipy.stats.randint(low, high+1).cdf)
 
         self.assertGreater(p_value, 0.05)
@@ -79,14 +94,14 @@ class SimulationTests(unittest.TestCase):
         geometric = simantha.simulation.Distribution({'geometric': success})
         rvs = [geometric.sample() for _ in range(1000)]
 
+        # H_0: The sample is drawn from the specified distribution
         _, p_value = scipy.stats.kstest(rvs, scipy.stats.geom(success).cdf)
 
         self.assertGreater(p_value, 0.05)
 
 
 class SingleMachineDeterministicTests(unittest.TestCase):
-    """Basic simulation behavior of a single machine.
-    """
+    """Basic simulation behavior of a single machine."""
     def build_system(self):
         source = Source()
         M1 = Machine('M1', cycle_time=1)
@@ -99,39 +114,50 @@ class SingleMachineDeterministicTests(unittest.TestCase):
         return System(objects=[source, M1, sink])
 
     def test_production(self):
+        """Test production of a single machine. With cycle time 1, the production count
+        should be equal to the simulation time."""
         system = self.build_system()
         system.simulate(simulation_time=1000, verbose=False)
         self.assertEqual(system.machines[0].parts_made, 1000)
 
     def test_production_warm_up(self):
+        """Test the warm up period for a single machine. No statistics should be 
+        gathered during the warm up, so production should be equal to simulation 
+        time, regardless of warm up duration."""
         system = self.build_system()
         system.simulate(warm_up_time=500, simulation_time=500, verbose=False)
         self.assertEqual(system.machines[0].parts_made, 500)
 
 
 class SingleMachineStochsticTests(unittest.TestCase):
-    """Testing simulation randomness for one machine.
-    """
+    """Testing simulation randomness for one machine."""
     def build_system(self):
         source = Source()
-        M1 = Machine('M1', cycle_time=1)
+        M1 = Machine(
+            'M1', 
+            cycle_time=1,
+            degradation_matrix=degradation_matrix,
+            cm_distribution={'constant': 10}
+        )
         sink = Sink()
         
         source.define_routing(downstream=[M1])
         M1.define_routing(upstream=[source], downstream=[sink])
         sink.define_routing(upstream=[M1])
 
-    def test_time_to_degrade(self):
-        # Verify the time to degrade distribution matches specified distribution
-        self.assertTrue(True)
+        return System(objects=[source, M1, sink])
 
     def test_production(self):
-        # Test production under random degradation
-        self.assertTrue(True)
+        random.seed(1)
+        system = self.build_system()
+
+        system.simulate(simulation_time=1000, verbose=False)
+
+        # Assert that the number of parts made is at most the simulation time
+        self.assertLessEqual(system.machines[0].parts_made, 1000)
 
 
-
-class TwoMachineOneBufferTests(unittest.TestCase):
+class TwoMachineDeterministicTests(unittest.TestCase):
     """Tests for a two-machine one-buffer line. 
     """
     def build_system(self):
@@ -152,7 +178,42 @@ class TwoMachineOneBufferTests(unittest.TestCase):
     def test_production(self):
         system = self.build_system()
         system.simulate(simulation_time=1000, verbose=False)
+
         self.assertEqual(sum([s.level for s in system.sinks]), 999)
+
+
+class TwoMachineStochasticTests(unittest.TestCase):
+    def build_system(self):
+        cm = {'constant': 10}
+        source = Source()
+        M1 = Machine(
+            'M1', 
+            cycle_time=1, 
+            degradation_matrix=degradation_matrix, 
+            cm_distribution=cm
+        )
+        B1 = Buffer('B1', capacity=5)
+        M2 = Machine(
+            'M2', 
+            cycle_time=1, 
+            degradation_matrix=degradation_matrix, 
+            cm_distribution=cm
+        )
+        sink = Sink()
+
+        source.define_routing(downstream=[M1])
+        M1.define_routing(upstream=[source], downstream=[B1])
+        B1.define_routing(upstream=[M1], downstream=[M2])
+        M2.define_routing(upstream=[B1], downstream=[sink])
+        sink.define_routing(upstream=[M2])
+
+        return System(objects=[source, M1, B1, M2, sink])
+    
+    def test_production(self):
+        system = self.build_system()
+        system.simulate(simulation_time=1000, verbose=False)
+        
+        self.assertLessEqual(system.machines[-1].parts_made, 1000)
 
 
 if __name__ == '__main__':
