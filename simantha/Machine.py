@@ -135,7 +135,7 @@ class Machine(Asset):
             self.env.now+self.get_cycle_time(),
             self, 
             self.request_space, 
-            f'{self.name}.get_part'
+            f'{self.name}.get_part at {self.env.now}'
         )
 
         # check if this event unblocked another machine
@@ -272,6 +272,7 @@ class Machine(Asset):
     def maintain(self):
         if not self.failed:
             self.downtime_start = self.env.now
+        self.has_part = False
         self.has_finished_part = False
         self.under_repair = True
 

@@ -87,7 +87,10 @@ class Environment:
             self.event_trace['action'].append(event.action.__name__)
             self.event_trace['source'].append(event.source)
             self.event_trace['priority'].append(event.priority)
-            self.event_trace['status'].append(event.status)
+            if event.canceled:
+                self.event_trace['status'].append('canceled')
+            else:
+                self.event_trace['status'].append(event.status)
             self.event_trace['index'].append(self.event_index)
 
     def export_trace(self):
