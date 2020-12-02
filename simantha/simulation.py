@@ -3,6 +3,74 @@ import pickle
 import random
 import sys
 import time
+import warnings
+
+class Event:
+    action_priority = [
+        # Events at the end of the last time step
+        'generate_arrival',
+        'request_space',
+        'put_part',
+        'restore',
+
+        # Events at the start of the current time step
+        'maintain_planned_failure',
+        'degrade',
+        'enter_queue',
+        'fail',
+        'inspect',
+        'maintain',
+        'request_part',
+        'get_part',
+
+        # Simulation runtime events
+        'terminate'
+    ]
+
+    action_priority = {
+        action: priority for priority, action in enumerate(action_priority)
+    }
+
+    def __init__(self, time, location, action, source='', priority=0, status=''):
+        self.time = time
+        self.location = location
+        self.action = action
+        self.source = source
+        self.priority = priority
+        self.status = status
+
+        self.tiebreak = random.random()
+
+        self.canceled = False
+        self.executed = False
+    
+    def get_action_priority(self):
+        if self.action.__name__ in self.action_priority.keys():
+            return self.action_priority[self.action.__name__]
+        else:
+            return float('inf')
+
+    def execute(self):
+        if not self.canceled:
+            self.action() 
+        else:
+            self.status = 'canceled'
+        self.executed = True
+
+    def __lt__(self, other):
+        return (
+            self.time, 
+            #self.action_priority[self.action.__name__], 
+            self.get_action_priority(),
+            self.priority, 
+            self.tiebreak
+        ) < (
+            other.time, 
+            #other.event_priority[other.action.__name__], 
+            other.get_action_priority(),
+            other.priority, 
+            other.tiebreak
+        )
 
 class Environment:
     """The main simulation environment for Simantha. This is designed to be an
@@ -73,7 +141,9 @@ class Environment:
             print(f'  priority: {next_event.priority}')
             sys.exit()
 
-    def schedule_event(self, time, location, action, source='', priority=0):
+    def schedule_event(
+        self, time, location, action, source='', priority=0, event_type=Event
+    ):
         new_event = Event(time, location, action, source, priority)
         bisect.insort(self.events, new_event)
 
@@ -99,72 +169,6 @@ class Environment:
             pickle.dump(self.event_trace, trace_file)
             trace_file.close()
 
-class Event:
-    action_priority = [
-        # Events at the end of the last time step
-        'generate_arrival',
-        'request_space',
-        'put_part',
-        'restore',
-
-        # Events at the start of the current time step
-        'maintain_planned_failure',
-        'degrade',
-        'enter_queue',
-        'fail',
-        'inspect',
-        'maintain',
-        'request_part',
-        'get_part',
-
-        # Simulation runtime events
-        'terminate'
-    ]
-
-    action_priority = {
-        action: priority for priority, action in enumerate(action_priority)
-    }
-
-    def __init__(self, time, location, action, source='', priority=0, status=''):
-        self.time = time
-        self.location = location
-        self.action = action
-        self.source = source
-        self.priority = priority
-        self.status = status
-
-        self.tiebreak = random.random()
-
-        self.canceled = False
-        self.executed = False
-    
-    def get_action_priority(self):
-        if self.action.__name__ in self.action_priority.keys():
-            return self.action_priority[self.action.__name__]
-        else:
-            return float('inf')
-
-    def execute(self):
-        if not self.canceled:
-            self.action() 
-        else:
-            self.status = 'canceled'
-        self.executed = True
-
-    def __lt__(self, other):
-        return (
-            self.time, 
-            #self.action_priority[self.action.__name__], 
-            self.get_action_priority(),
-            self.priority, 
-            self.tiebreak
-        ) < (
-            other.time, 
-            #other.event_priority[other.action.__name__], 
-            other.get_action_priority(),
-            other.priority, 
-            other.tiebreak
-        )
 
 def rng(dist):
     if 'constant' in dist.keys():
@@ -230,3 +234,10 @@ class Distribution:
             while random.random() > p:
                 s += 1
             return s
+
+class ContinuousDistribution:
+    def __init__(self, distribution):
+        warnings.warn('Continuous distributions are not thoroughly tested.')
+        for distribution_type, distribution_parameters in distribution.items():
+            self.distribution_type = distribution_type
+            self.distribution_parameters = distribution_parameters

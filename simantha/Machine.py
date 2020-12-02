@@ -12,18 +12,18 @@ class Machine(Asset):
         cycle_time=1,
         selection_priority=1,
 
-        degradation_matrix=[[1,0],[0,1]], #  by default, never degrade
+        degradation_matrix=[[1,0],[0,1]], # By default, never degrade
         cbm_threshold=None,
-        planned_failure=None, # an optional planned failure, in the form of (time, duration)
+        planned_failure=None, # Optional planned failure, in the form of (time, duration)
 
         pm_distribution=5,
         cm_distribution=10,
         
-        # initial machine state
+        # Initial machine state
         initial_health=0,
         initial_remaining_process=None
     ):
-        # user-specified parameters
+        # User-specified parameters
         self.name = name
         
         self.cycle_time = Distribution(cycle_time)
@@ -35,7 +35,7 @@ class Machine(Asset):
         self.remaining_process_time = self.initial_remaining_process
         self.selection_priority = selection_priority
         
-        # initial machine state
+        # Initial machine state
         self.has_finished_part = False
         self.initial_health = initial_health
         self.health = initial_health
@@ -61,21 +61,21 @@ class Machine(Asset):
                 'Specifying planned failures along with degradtion is untested and may cause errors.'
             )
         
-        # routing
+        # Routing
         self.upstream = []
         self.downstream = []
         
-        # machine status
+        # Machine status
         self.has_part = False
         self.under_repair = False
         self.in_queue = False
         self.remaining_ttr = None
     
-        # machine statistics
+        # Machine statistics
         self.parts_made = 0
         self.downtime = 0
 
-        # simulation data
+        # Simulation data
         self.production_data = {'time': [0], 'production': [0]}
         self.health_data = {'time': [0], 'health': [self.health]}
         self.maintenance_data = {'time': [], 'event': []}
@@ -99,30 +99,41 @@ class Machine(Asset):
         self.target_giver = None
         self.target_receiver = None
 
+        self.reserved_content = 0
+        self.reserved_vacancy = 0
+
         self.blocked = False
         self.starved = True
         
-        # initialize statistics
+        # Initialize statistics
         self.parts_made = 0
         self.downtime = 0
 
-        # schedule planned failures
+        # Schedule planned failures
         if self.planned_failure is not None:
             self.env.schedule_event(
                 self.planned_failure[0], self, self.maintain_planned_failure
             )
 
-        # initialize data
+        # Initialize data
         if self.env.collect_data:
             self.production_data = {'time': [0], 'production': [0]}
             self.health_data = {'time': [0], 'health': [self.health]}
             self.maintenance_data = {'time': [], 'event': []}
 
-        # schedule initial events
+        # Schedule initial events
         time_to_degrade = self.get_time_to_degrade()
         self.env.schedule_event(
             time_to_degrade, self, self.degrade, f'{self.name}.initialize'
         )
+
+        self.initialize_addon_processes()
+
+    def initialize_addon_processes(self):
+        pass
+    
+    def reserve_vacancy(self, quantity=1):
+        self.reserved_vacancy += 1
 
     def get_part(self):
         # Choose a random upstream container from which to take a part.
@@ -332,6 +343,11 @@ class Machine(Asset):
         self.env.schedule_event(
             self.env.now, self.maintainer, self.maintainer.inspect, source
         )
+
+        self.repair_addon_processes()
+
+    def repair_addon_processes(self):
+        pass
     
     def requesting_maintenance(self):
         return (

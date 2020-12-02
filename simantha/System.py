@@ -25,7 +25,8 @@ class System:
         for obj in objects:
             if type(obj) == Source:
                 self.sources.append(obj)
-            elif type(obj) == Machine:
+            #elif type(obj) == Machine:
+            elif isinstance(obj, Machine):
                 self.machines.append(obj)
             elif type(obj) == Buffer:
                 self.buffers.append(obj)
