@@ -8,23 +8,23 @@ import warnings
 class Event:
     action_priority = [
         # Events at the end of the last time step
-        'generate_arrival',
-        'request_space',
-        'put_part',
-        'restore',
+        'generate_arrival',          # Priority: 0 (highest priority)
+        'request_space',             # 1 
+        'put_part',                  # 2
+        'restore',                   # 3
 
         # Events at the start of the current time step
-        'maintain_planned_failure',
-        'degrade',
-        'enter_queue',
-        'fail',
-        'inspect',
-        'maintain',
-        'request_part',
-        'get_part',
+        'maintain_planned_failure',  # 4
+        'degrade',                   # 5
+        'enter_queue',               # 6
+        'fail',                      # 7
+        'inspect',                   # 8
+        'maintain',                  # 9
+        'request_part',              # 10
+        'get_part',                  # 11
 
         # Simulation runtime events
-        'terminate'
+        'terminate'                  # 12 (lowest priority)
     ]
 
     action_priority = {

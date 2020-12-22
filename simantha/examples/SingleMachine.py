@@ -1,8 +1,3 @@
-import os
-import sys
-
-sys.path.insert(0, os.path.abspath('../..'))
-
 from simantha import Source, Machine, Sink, System
 
 def main():
