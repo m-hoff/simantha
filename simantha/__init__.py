@@ -1,9 +1,3 @@
-<<<<<<< HEAD
-from .Evaluator import *
-from .Machine import *
-from .Repairman import *
-from .System import *
-=======
 from .System import System
 from .Source import *
 from .Machine import *
@@ -19,4 +13,3 @@ from .utils import *
 
 #__title__ = 'simantha'
 #__author__ = 'Michael Hoffman <hoffman@psu.edu>'
->>>>>>> dev

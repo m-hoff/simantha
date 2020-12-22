@@ -160,7 +160,6 @@ class Machine(Asset):
         self.target_giver = None
 
     def request_space(self):
-        #request_space_start = time.time()
         self.has_finished_part = True
         candidate_receivers = [obj for obj in self.downstream if obj.can_receive()]
         if len(candidate_receivers) > 0:
@@ -188,7 +187,7 @@ class Machine(Asset):
         source = f'{self.name}.put_part at {self.env.now}'
         self.env.schedule_event(self.env.now, self, self.request_part, source)
 
-        # check if this event fed another machine
+        # Check if this event fed another machine
         for asset in self.target_receiver.downstream:
             if self.target_receiver.can_give() and asset.can_receive() and not asset.has_content_request():
                 source = f'{self.name}.put_part at {self.env.now}'
@@ -384,7 +383,7 @@ class Machine(Asset):
         )
 
     def has_content_request(self):
-        # check if a machine has an existing request for a part
+        # Check if a machine has an existing request for a part
         for event in self.env.events:
             if (
                 ((event.location is self) and (event.action.__name__ == 'request_part'))
@@ -400,14 +399,14 @@ class Machine(Asset):
         return False
 
     def cancel_all_events(self):
-        # cancel all events scheduled on this machine
+        # Cancel all events scheduled on this machine
         for event in self.env.events:
             if event.location == self:
                 event.canceled = True
 
     def get_candidate_givers(self, only_free=False, blocked=False):
         if blocked:
-            # get only candidate givers that can give a part
+            # Get only candidate givers that can give a part
             return [obj for obj in self.get_candidate_givers() if obj.blocked]
         else:
             return [obj for obj in self.upstream if obj.can_give()]
@@ -416,5 +415,5 @@ class Machine(Asset):
         if starved:
             return [obj for obj in self.get_candidate_receivers() if obj.starved]
         else:
-            # get only candidate receivers that can accept a part
+            # Get only candidate receivers that can accept a part
             return [obj for obj in self.downstream if obj.can_receive()]

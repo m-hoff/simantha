@@ -1,20 +1,20 @@
 # Simantha
 
-<<<<<<< HEAD
-`maintsim` can be used to model a discrete manufacturing system where components degrade over time and receive maintenance. Users can define the configuration and parameters of the system, as well as the maintenance policy to be carried out. It is built on the `SimPy` discrete-event simulation package.
-
-## Installing maintsim
-
-`pip install maintsim`
-=======
-Simantha uses discrete event simulation to model the behavior of discrete manufacturing systems, in particular the production and maintenance functions of a system. 
->>>>>>> dev
+Simantha uses discrete event simulation to model the behavior of discrete manufacturing systems, in particular the production and maintenance functions mass production systems. 
 
 ## Using this package
 
 ### Requirements
 
 Simantha requires Python &ge; 3.6 and [SciPy](https://www.scipy.org/) &ge; 1.5.2 for running tests.
+
+### Installation
+
+Install from PyPi using
+
+```
+pip install simantha
+```
 
 ### Setting up a manufacturing system
 
@@ -37,9 +37,7 @@ Parameters
 
 While a machine operates it will continuously take parts from an upstream container (if the container is not empty), process the part, and place the part in a downstream container (if the container is not full). Machines can be subject to periodic degradation and failure, at which point they will require maintenance action before they can be restored.
 
-Currently, machines may only follow a Markovian degradation process[^1]. Under this degradation mode, a degradation transition matrix is specified as a parameter of a machine. State transitions of this Markov process represent changes in the degradation level of the machine. In general, it is assumed that there is one absorbing state that represents machine failure. 
-
-[^1]: Chan, G. K., & Asgarpoor, S. (2006). Optimum maintenance policy with Markov processes. Electric power systems research, 76(6-7), 452-456. https://doi.org/10.1016/j.epsr.2005.09.010
+Currently, machines may only follow a Markovian degradation process.<sup>[1](#chan)</sup> Under this degradation mode, a degradation transition matrix is specified as a parameter of a machine. State transitions of this Markov process represent changes in the degradation level of the machine. In general, it is assumed that there is one absorbing state that represents machine failure. 
 
 Parameters
 - `cycle_time` - the duration of time a machine must process a part before it can be placed at the next station.
@@ -128,9 +126,7 @@ Simulation finished in 0.00s
 Parts produced: 100
 ```
 
-As a slightly more complex example, the code below constructs a two-machine one-buffer line where each machine is subject to degradation. The degradation transition matrix will represent Bernoulli reliability with p = 0.01.[^2] Additionally, the maintainer capacity is set to 1, indicating that only one machine may be repaired at a time.
-
-[^2]: Li, J., & Meerkov, S. M. (2008). Production systems engineering. Springer Science & Business Media. https://doi.org/10.1007/978-0-387-75579-3
+As a slightly more complex example, the code below constructs a two-machine one-buffer line where each machine is subject to degradation. The degradation transition matrix will represent Bernoulli reliability with p = 0.01.<sup>[2](#li)</sup> Additionally, the maintainer capacity is set to 1, indicating that only one machine may be repaired at a time.
 
 ```python
 >>> from simantha import Source, Machine, Buffer, Sink, System, Maintainer
@@ -192,10 +188,10 @@ Parts produced: 200
 
 The elements of these examples can be used to more complex configurations of arbitrary structure. Additionally, the `Machine` class may represent other operations in a manufacturing system, such as an inspection station or a material handling process. 
 
-## Planned features
+Additional examples are located in `simantha/examples/`.
 
-Key planned features include
+## References
 
-- Parallelization of simulation iterations
-- Improved efficiency for iterating a simulation
-- Exporting system model for reuse
+<a name="chan">1.</a> Chan, G. K., & Asgarpoor, S. (2006). Optimum maintenance policy with Markov processes. Electric power systems research, 76(6-7), 452-456. https://doi.org/10.1016/j.epsr.2005.09.010
+
+<a name="li">2.</a> Li, J., & Meerkov, S. M. (2008). Production systems engineering. Springer Science & Business Media. https://doi.org/10.1007/978-0-387-75579-3

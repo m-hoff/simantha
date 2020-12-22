@@ -1,14 +1,3 @@
-<<<<<<< HEAD
-import numpy as np
-
-def generate_degradation_matrix(q, dim=10):
-    degradation_matrix = np.eye(dim)
-    for i in range(len(degradation_matrix - 1)):
-        degradation_matrix[i, i] = 1 - q
-        degradation_matrix[i, i+1] = q
-
-    return degradation_matrix
-=======
 def generate_degradation_matrix(p, h_max):
     # Returns an upper bidiagonal degradation matrix with probability p of degrading at
     # each time step.
@@ -26,4 +15,3 @@ DAY = 24 * 60
 WEEK = 7 * DAY
 MONTH = 30 * DAY
 YEAR = 365 * DAY
->>>>>>> dev

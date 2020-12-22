@@ -60,13 +60,11 @@ class Event:
     def __lt__(self, other):
         return (
             self.time, 
-            #self.action_priority[self.action.__name__], 
             self.get_action_priority(),
             self.priority, 
             self.tiebreak
         ) < (
             other.time, 
-            #other.event_priority[other.action.__name__], 
             other.get_action_priority(),
             other.priority, 
             other.tiebreak
