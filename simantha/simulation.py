@@ -33,7 +33,12 @@ class Event:
 
     def __init__(self, time, location, action, source='', priority=0, status=''):
         self.time = time
-        self.location = location
+        if type(location) == str:
+            self.location = location
+        elif location is None:
+            self.location = ''
+        else:
+            self.location = location.name
         self.action = action
         self.source = source
         self.priority = priority
@@ -60,13 +65,11 @@ class Event:
     def __lt__(self, other):
         return (
             self.time, 
-            #self.action_priority[self.action.__name__], 
             self.get_action_priority(),
             self.priority, 
             self.tiebreak
         ) < (
             other.time, 
-            #other.event_priority[other.action.__name__], 
             other.get_action_priority(),
             other.priority, 
             other.tiebreak
@@ -136,7 +139,7 @@ class Environment:
             self.export_trace()
             print('Failed event:')
             print(f'  time:     {next_event.time}')
-            print(f'  location: {next_event.location.name}')
+            print(f'  location: {next_event.location}')
             print(f'  action:   {next_event.action.__name__}')
             print(f'  priority: {next_event.priority}')
             sys.exit()
@@ -144,6 +147,8 @@ class Environment:
     def schedule_event(
         self, time, location, action, source='', priority=0, event_type=Event
     ):
+        if (type(location) != str) and (location is not None):
+            location = location.name
         new_event = Event(time, location, action, source, priority)
         bisect.insort(self.events, new_event)
 
@@ -153,7 +158,7 @@ class Environment:
     def trace_event(self, event):
         if self.trace:
             self.event_trace['time'].append(self.now)
-            self.event_trace['location'].append(event.location.name)
+            self.event_trace['location'].append(event.location)
             self.event_trace['action'].append(event.action.__name__)
             self.event_trace['source'].append(event.source)
             self.event_trace['priority'].append(event.priority)

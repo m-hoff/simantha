@@ -124,7 +124,7 @@ class Machine(Asset):
         # Schedule initial events
         time_to_degrade = self.get_time_to_degrade()
         self.env.schedule_event(
-            time_to_degrade, self, self.degrade, f'{self.name}.initialize'
+            time_to_degrade, self.name, self.degrade, f'{self.name}.initialize'
         )
 
         self.initialize_addon_processes()
@@ -144,7 +144,7 @@ class Machine(Asset):
 
         self.env.schedule_event(
             self.env.now+self.get_cycle_time(),
-            self, 
+            self.name, 
             self.request_space, 
             f'{self.name}.get_part at {self.env.now}'
         )
@@ -167,7 +167,7 @@ class Machine(Asset):
             self.target_receiver = random.choice(candidate_receivers)
             self.target_receiver.reserve_vacancy(1)
             source = f'{self.name}.request_space at {self.env.now}'
-            self.env.schedule_event(self.env.now, self, self.put_part, source)
+            self.env.schedule_event(self.env.now, self.name, self.put_part, source)
         else:
             self.blocked = True
             
@@ -186,13 +186,13 @@ class Machine(Asset):
             self.production_data['production'].append(self.parts_made)        
 
         source = f'{self.name}.put_part at {self.env.now}'
-        self.env.schedule_event(self.env.now, self, self.request_part, source)
+        self.env.schedule_event(self.env.now, self.name, self.request_part, source)
 
         # check if this event fed another machine
         for asset in self.target_receiver.downstream:
             if self.target_receiver.can_give() and asset.can_receive() and not asset.has_content_request():
                 source = f'{self.name}.put_part at {self.env.now}'
-                self.env.schedule_event(self.env.now, asset, asset.request_part, source)
+                self.env.schedule_event(self.env.now, asset.name, asset.request_part, source)
         
         self.target_receiver = None
 
@@ -387,22 +387,22 @@ class Machine(Asset):
         # check if a machine has an existing request for a part
         for event in self.env.events:
             if (
-                ((event.location is self) and (event.action.__name__ == 'request_part'))
-                or ((event.location is self) and (event.action.__name__ == 'get_part'))
+                ((event.location is self.name) and (event.action.__name__ == 'request_part'))
+                or ((event.location is self.name) and (event.action.__name__ == 'get_part'))
             ):
                 return True
         return False
 
     def has_vacancy_request(self):
         for event in self.env.events:
-            if (event.location is self) and (event.action.__name__ == 'request_space'):
+            if (event.location is self.name) and (event.action.__name__ == 'request_space'):
                 return True
         return False
 
     def cancel_all_events(self):
         # cancel all events scheduled on this machine
         for event in self.env.events:
-            if event.location == self:
+            if event.location == self.name:
                 event.canceled = True
 
     def get_candidate_givers(self, only_free=False, blocked=False):
